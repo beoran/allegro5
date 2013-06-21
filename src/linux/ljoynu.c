@@ -275,7 +275,10 @@ static void ljoy_scan(bool configure)
 
    device_name = al_ustr_new("");
 
-   /* This is a big number, but there can be gaps, and other unrelated event queues. */
+   /* This is a big number, but there can be gaps, and other unrelated event queues. 
+    * Perhaps it would be better to use glob() here in stead o gessing the numbers 
+    * like this?
+    */
    for (num = 0; num < 32; num++) {
       if (!ljoy_detect_device_name(num, device_name))
          continue;
