@@ -10,19 +10,31 @@
 
 #include "common.c"
 
+
 #define MAX_HAPTICS  32
 
 /* globals */
 ALLEGRO_EVENT_QUEUE  *event_queue;
 
-int num_haptics = 0;
-ALLEGRO_HAPTIC * haptics[MAX_HAPTICS];
 
 
 int main(void)
 {
    int index;
-   ALLEGRO_DISPLAY *display;
+   ALLEGRO_DISPLAY * display;
+   ALLEGRO_HAPTIC  * haptic = NULL;
+   ALLEGRO_HAPTIC_EFFECT effect = {0};
+   double intensity = 1.0;
+   double duration  = 1.0;
+   effect.type                           = ALLEGRO_HAPTIC_RUMBLE;
+   effect.data.rumble.strong_magnitude   = intensity;
+   effect.data.rumble.weak_magnitude     = intensity;  
+   effect.replay.delay                   = 0.1;
+   effect.replay.length                  = duration;
+   
+   
+   int num_joysticks;
+   double gain = -1.0;
 
    if (!al_init()) {
       abort_example("Could not init Allegro.\n");
@@ -32,7 +44,7 @@ int main(void)
    if (!display) {
       abort_example("al_create_display failed\n");
    }
-
+   al_install_joystick();
    al_install_haptic();
 
    event_queue = al_create_event_queue();
@@ -40,15 +52,37 @@ int main(void)
       abort_example("al_create_event_queue failed\n");
    }
    open_log();
-   num_haptics = al_get_num_haptics();
-   log_printf("Found %d haptic devices.\n", num_haptics);
-   for(index = 0; index < num_haptics; index++) {
-     ALLEGRO_HAPTIC * hap = al_get_haptic(index);; 
-     haptics[index] = hap;
-     if (hap) {  
-      log_printf("Opened device %d: %s.\n", al_get_haptic_name(hap));
+     
+   num_joysticks = al_get_num_joysticks();
+   for(index = 0; index < num_joysticks; index++) {
+     ALLEGRO_JOYSTICK * joy = al_get_joystick(index);
+     if(!joy) continue;
+     if (!al_is_joystick_haptic(joy)) {  
+       log_printf("Joystick %s does not support force feedback.\n", al_get_joystick_name(joy));
+       al_release_joystick(joy);
+       continue;
      } else {
-      log_printf("Could not open haptic device %d.\n", index);
+       ALLEGRO_HAPTIC_EFFECT_ID id;
+       log_printf("Joystick %s supports force feedback.\n", al_get_joystick_name(joy));
+       haptic = al_get_haptic_from_joystick(joy);
+       log_printf("Can play back %d haptic effects.\n", al_get_num_haptic_effects(haptic));
+       log_printf("Set gain: %d.\n", al_set_haptic_gain(haptic, 0.8));
+       log_printf("Get gain: %lf.\n", al_get_haptic_gain(haptic));
+       log_printf("Capabilities: %d.\n", al_get_haptic_capabilities(haptic));
+       log_printf("Upload: %d.\n: ", al_upload_haptic_effect(haptic, &effect, &id));
+       log_printf("Play: %d.\n: ", al_play_haptic_effect(&id, 5));
+       // al_rest(1.1 * 5 + 0.5);
+       while (al_is_haptic_effect_playing(&id)) {
+         //log_printf(".");
+       }
+       log_printf("Set gain: %d.\n", al_set_haptic_gain(haptic, 0.4));
+       log_printf("Play: %d.\n: ", al_play_haptic_effect(&id, 5));
+       while (al_is_haptic_effect_playing(&id)) {
+         //log_printf(".");
+       }
+       log_printf("Release: %d.\n: ", al_release_haptic_effect(&id));
+       
+       log_printf("\nAll done!\n");       
      }
    }
    

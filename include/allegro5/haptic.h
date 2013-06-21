@@ -161,80 +161,108 @@ typedef struct ALLEGRO_HAPTIC_EFFECT ALLEGRO_HAPTIC_EFFECT;
 
 
 
+/* Type: ALLEGRO_HAPTIC_EFFECT_ID
+ */
+typedef struct ALLEGRO_HAPTIC_EFFECT_ID ALLEGRO_HAPTIC_EFFECT_ID;
+
+struct ALLEGRO_HAPTIC_EFFECT_ID {
+  ALLEGRO_HAPTIC        * _haptic;
+  ALLEGRO_HAPTIC_EFFECT * _effect;
+  int                     _id;
+  int                     _handle;
+  bool                    _playing;  
+  double                  _started;
+  int                     _loops; 
+};
+
+
 /* Installs the haptic (force feedback) device subsystem. */
 AL_FUNC(bool,             al_install_haptic          , (void));
 /* Uninstalls the haptic device subsystem. */
 AL_FUNC(void,             al_uninstall_haptic        , (void));
 /* Returns true if the haptic device subsystem is installed, false if not. */
 AL_FUNC(bool,             al_is_haptic_installed     , (void));
-/* Checks if no new haptic devices became availabe and reconfigues the haptic 
- *subsystem. */
-AL_FUNC(bool,             al_reconfigure_haptic      , (void));
 
-/* Gets the amount of available haptic devices.*/
-AL_FUNC(int,              al_get_num_haptics         , (void));
+/* Returns true if the mouse has haptic capabilities, false if not.*/
+AL_FUNC(bool,             al_is_mouse_haptic         , (ALLEGRO_MOUSE *));
+/* Returns true if the joystick has haptic capabilities, false if not.*/
+AL_FUNC(bool,             al_is_joystick_haptic      , (ALLEGRO_JOYSTICK *));
+/* Returns true if the keyboard has haptic capabilities, false if not.*/
+AL_FUNC(bool,             al_is_keyboard_haptic      , (ALLEGRO_KEYBOARD *));
+/* Returns true if the display has haptic capabilities, false if not.*/
+AL_FUNC(bool,             al_is_display_haptic       , (ALLEGRO_DISPLAY *));
+/* Returns true if the touch input has haptic capabilities, false if not.*/
+AL_FUNC(bool,             al_is_touch_input_haptic   , (ALLEGRO_TOUCH_INPUT *));
 
-/* Opens and initializes the haptic device and returns a pointer 
- * to a device handle, or NULL on error.  */
-AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic             , (int hapticn));
-/* Closes the haptic device. */
-AL_FUNC(void,             al_release_haptic          , (ALLEGRO_HAPTIC *));
+
+/* If the mouse has haptic capabilities, returns the associated haptic device handle. 
+ * Otherwise returns NULL. */
+AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_mouse    , (ALLEGRO_MOUSE *));
+/* If the mouse has haptic capabilities, returns the associated haptic device handle. 
+ * Otherwise returns NULL. */
+AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_joystick , (ALLEGRO_JOYSTICK *));
+/* If the keyboard has haptic capabilities, returns the associated haptic device handle. 
+ * Otherwise returns NULL. */
+AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_keyboard , (ALLEGRO_KEYBOARD *));
+/* If the display has haptic capabilities, returns the associated haptic device handle. 
+ * Otherwise returns NULL. */
+AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_display  , (ALLEGRO_DISPLAY *));
+/* If the touch input has haptic capabilities, returns the associated haptic 
+ * device handle. Otherwise returns NULL. */
+AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_touch_input, (ALLEGRO_TOUCH_INPUT *));
+
+
+
+
 /* Returns true if the haptic device can currently be used, false if not.*/
-AL_FUNC(bool,             al_get_haptic_active       , (ALLEGRO_HAPTIC *));
-/* Gets a string that describes the name of the haptic device.*/
-AL_FUNC(const char*,      al_get_haptic_name         , (ALLEGRO_HAPTIC *));
+AL_FUNC(bool,   al_get_haptic_active       , (ALLEGRO_HAPTIC *));
 
 /* Returns an integer with or'ed values from ALLEGRO_HAPTIC_CONSTANTS, that if
  set indicate that the haptic device supports the given feature. */
-AL_FUNC(int,              al_get_haptic_capabilities , (ALLEGRO_HAPTIC *));
+AL_FUNC(int,    al_get_haptic_capabilities , (ALLEGRO_HAPTIC *));
 
 /* Sets the gain of the haptic device if supported. Gain is much like volume for sound, 
  it is as if every effect's intensity is multiplied by it. Gain is a value between 
  0.0 and 1.0. Returns true if set sucessfully, false if not.*/
-AL_FUNC(bool,             al_set_haptic_gain         , (ALLEGRO_HAPTIC *, double gain));
+AL_FUNC(bool,   al_set_haptic_gain         , (ALLEGRO_HAPTIC *, double gain));
 /* Returns the current gain of the device. */
-AL_FUNC(double,           al_get_haptic_gain         , (ALLEGRO_HAPTIC *));
+AL_FUNC(double, al_get_haptic_gain         , (ALLEGRO_HAPTIC *));
 
-/* Returns true if the mouse has haptic capabilities, false if not.*/
-AL_FUNC(bool,             al_is_mouse_haptic         , (ALLEGRO_MOUSE *));
-
-/* Returns true if the joystick has haptic capabilities, false if not.*/
-AL_FUNC(bool,             al_is_joystick_haptic      , (ALLEGRO_JOYSTICK *));
-/* If the mouse has haptic capabilities, returns the associated haptic device handle. 
- * Otherwise returns NULL;*/
-AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_mouse   , (ALLEGRO_MOUSE *));
-/* If the mouse has haptic capabilities, returns the associated haptic device handle. 
- * Otherwise returns NULL;*/
-AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_joystick, (ALLEGRO_JOYSTICK *));
 
 /* Returns the maximum amount of haptic effects that can be uploaded to the device. */
-AL_FUNC(int,              al_get_num_haptic_effects  , (ALLEGRO_HAPTIC *));
+AL_FUNC(int,    al_get_num_haptic_effects  , (ALLEGRO_HAPTIC *));
 
 /* Returns true if the haptic device can play the haptic effect as given, false if not. */
-AL_FUNC(bool,             al_is_haptic_effect_ok     , (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *));
+AL_FUNC(bool,   al_is_haptic_effect_ok     , (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *));
 
-/* Uploads the haptic effect to the device. In play_id, an integer is stored that is 
- a reference to be used to control playback of the effect.*/
-AL_FUNC(bool,             al_upload_haptic_effect    , (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *));
+/* Uploads the haptic effect to the device. In play_id, a handle is stored that is 
+ a reference to be used to control playback of the effect. */
+AL_FUNC(bool,   al_upload_haptic_effect    , (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *, ALLEGRO_HAPTIC_EFFECT_ID * play_id));
 
-/* Plays back a previously uploaded haptic effect on this device. */
-AL_FUNC(bool,             al_play_haptic_effect      , (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT , * int loop));
+/* Plays back a previously uploaded haptic effect. */
+AL_FUNC(bool,   al_play_haptic_effect      , (ALLEGRO_HAPTIC_EFFECT_ID *, int loop));
 
-/* Stops playing a haptic effect on this device. */
-AL_FUNC(bool,             al_stop_haptic_effect      , (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *));
+/* Uploads and immediately plays back the haptic effect to the device. */
+AL_FUNC(bool,   al_upload_and_play_haptic_effect , (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *, int loop, ALLEGRO_HAPTIC_EFFECT_ID * play_id));
+
+/* Stops playing a haptic effect . */
+AL_FUNC(bool,   al_stop_haptic_effect      , (ALLEGRO_HAPTIC_EFFECT_ID *));
 /* Stops playing all haptic effects on this device. */
-AL_FUNC(bool,             al_stop_all_haptic_effects , (ALLEGRO_HAPTIC *));
+AL_FUNC(bool,   al_stop_all_haptic_effects , (ALLEGRO_HAPTIC *));
 
-/* Returns true if the haptic effect is playing on the device false if not or if stopped. */
-AL_FUNC(bool,             al_is_haptic_effect_playing, (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *));
+/* Returns true if the haptic effect is playing or false if not or if stopped. */
+AL_FUNC(bool,   al_is_haptic_effect_playing, (ALLEGRO_HAPTIC_EFFECT_ID *));
+
+/* Releases the haptic effect from the device it has been uploaded to, allowing for 
+ other effects to be uploaded. */
+AL_FUNC(bool,   al_release_haptic_effect, (ALLEGRO_HAPTIC_EFFECT_ID *));
+
+
 
 /* Uploads a simple rumble effect to the haptic device and starts playback immediately.
  */
-AL_FUNC(bool,             al_rumble_haptic           , (ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *, double intensity));
+AL_FUNC(bool,   al_rumble_haptic, (ALLEGRO_HAPTIC *, double intensity, double duration, ALLEGRO_HAPTIC_EFFECT_ID *));
 
-/* Event source for haptic device events. 
- *(XXX: currently no events are planned to be emitted, but that may change. )*/
-AL_FUNC(ALLEGRO_EVENT_SOURCE *, al_get_haptic_event_source, (void));
 
 
 

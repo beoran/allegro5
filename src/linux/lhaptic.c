@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
@@ -33,14 +34,17 @@
 #define ALLEGRO_NO_COMPATIBILITY
 
 #include "allegro5/allegro.h"
+#include "allegro5/joystick.h"
 #include "allegro5/haptic.h"
 #include "allegro5/path.h"
 #include "allegro5/platform/alplatf.h"
 #include "allegro5/internal/aintern.h"
 #include "allegro5/internal/aintern_events.h"
 #include "allegro5/internal/aintern_haptic.h"
+#include "allegro5/internal/aintern_ljoynu.h"
 #include "allegro5/platform/aintunix.h"
-#include </home/bjorn/src/allegro/lib/Headers/allegro5/haptic.h>
+
+
 
 
 #if defined(ALLEGRO_HAVE_SYS_INOTIFY_H) && defined(ALLEGRO_HAVE_SYS_TIMERFD_H)
@@ -57,11 +61,17 @@ ALLEGRO_DEBUG_CHANNEL("lhaptic");
  *for everyone" for now. :p */
 #define HAPTICS_BUF_MAX         1000
 
+/* Support at most 16 effects per device. */
+#define HAPTICS_EFFECTS_MAX     16
+
+/* Tests if a bit in a byte array is set. */
+#define test_bit(bit, array)  (array [bit / (sizeof(long) * 8)] & (1 << (bit % (8 * sizeof(long)) )))
+
 
 typedef struct ALLEGRO_HAPTIC_LINUX
 {
+   struct ALLEGRO_HAPTIC parent;
    int in_use;
-   ALLEGRO_HAPTIC parent;
    int config_state;
    bool marked;
    int fd;
@@ -69,6 +79,7 @@ typedef struct ALLEGRO_HAPTIC_LINUX
    int state;
    char name[HAPTICS_BUF_MAX];
    int flags;
+   int effects[HAPTICS_EFFECTS_MAX];
 } ALLEGRO_HAPTIC_LINUX;
 
 
@@ -76,33 +87,34 @@ typedef struct ALLEGRO_HAPTIC_LINUX
 static bool lhap_init_haptic(void);
 static void lhap_exit_haptic(void);
 
-static bool lhap_reconfigure_haptics(void);
-static int lhap_num_haptics(void);
-static ALLEGRO_HAPTIC *lhap_get_haptic(int num);
-static void lhap_release_haptic(ALLEGRO_HAPTIC *hap_);
-
-static int lhap_get_flags(ALLEGRO_HAPTIC *hap_);
-static const char *lhap_get_name(ALLEGRO_HAPTIC *hap_);
 
 
-/* forward declarations 
-static bool lhap_get_active(ALLEGRO_HAPTIC *hap_);
-static void lhap_generate_event(ALLEGRO_HAPTIC_LINUX *joy, int button, ALLEGRO_EVENT_TYPE event_type);
-*/
 
-static bool lhap_get_active(ALLEGRO_HAPTIC *);
-static bool lhap_is_mouse_haptic(ALLEGRO_MOUSE *);
+static bool lhap_is_mouse_haptic(ALLEGRO_MOUSE * dev);
 static bool lhap_is_joystick_haptic(ALLEGRO_JOYSTICK *);
-static ALLEGRO_HAPTIC *  lhap_get_from_mouse(ALLEGRO_MOUSE *);
-static ALLEGRO_HAPTIC *  lhap_get_from_joystick(ALLEGRO_JOYSTICK *);
-static int               lhap_get_num_axes(ALLEGRO_HAPTIC *); 
-static bool lhap_is_effect_ok(ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *);
-static bool lhap_upload_effect(ALLEGRO_HAPTIC *, ALLEGRO_HAPTIC_EFFECT *, int *);
-static bool lhap_play_effect(ALLEGRO_HAPTIC *, int, int);
-static bool lhap_stop_effect(ALLEGRO_HAPTIC *, int);
-static bool lhap_is_effect_stopped(ALLEGRO_HAPTIC *, int);
-static bool lhap_stop_all_effects(ALLEGRO_HAPTIC *);
-static bool lhap_is_effect_playing(ALLEGRO_HAPTIC *, int);
+static bool lhap_is_keyboard_haptic(ALLEGRO_KEYBOARD * dev);
+static bool lhap_is_display_haptic(ALLEGRO_DISPLAY * dev);
+static bool lhap_is_touch_input_haptic(ALLEGRO_TOUCH_INPUT * dev);
+
+static ALLEGRO_HAPTIC * lhap_get_from_mouse(ALLEGRO_MOUSE *dev);
+static ALLEGRO_HAPTIC * lhap_get_from_joystick(ALLEGRO_JOYSTICK *dev);
+static ALLEGRO_HAPTIC * lhap_get_from_keyboard(ALLEGRO_KEYBOARD *dev);
+static ALLEGRO_HAPTIC * lhap_get_from_display(ALLEGRO_DISPLAY *dev);
+static ALLEGRO_HAPTIC * lhap_get_from_touch_input(ALLEGRO_TOUCH_INPUT *dev);
+
+static bool   lhap_get_active(ALLEGRO_HAPTIC * hap);
+static int    lhap_get_capabilities(ALLEGRO_HAPTIC * dev);   
+static double lhap_get_gain(ALLEGRO_HAPTIC * dev);
+static bool   lhap_set_gain(ALLEGRO_HAPTIC * dev, double);
+static int    lhap_get_num_effects(ALLEGRO_HAPTIC * dev);   
+
+static bool lhap_is_effect_ok(ALLEGRO_HAPTIC *dev, ALLEGRO_HAPTIC_EFFECT *eff);
+static bool lhap_upload_effect(ALLEGRO_HAPTIC *dev, ALLEGRO_HAPTIC_EFFECT *eff, ALLEGRO_HAPTIC_EFFECT_ID * id);
+static bool lhap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID * id, int loop);
+static bool lhap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID * id);
+static bool lhap_stop_all_effects(ALLEGRO_HAPTIC *dev);
+static bool lhap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID * id);
+static bool lhap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID * id);
 
 /* The haptics driver vtable. */
 ALLEGRO_HAPTIC_DRIVER hapdrv_linux = 
@@ -113,31 +125,35 @@ ALLEGRO_HAPTIC_DRIVER hapdrv_linux =
    "Linux haptic(s)",
    lhap_init_haptic,
    lhap_exit_haptic,
-   lhap_reconfigure_haptics,
-   lhap_num_haptics,
-   lhap_get_haptic,
-   lhap_release_haptic,
-   lhap_get_flags,
-   lhap_get_name,
-   lhap_get_active,
+   
    lhap_is_mouse_haptic,
    lhap_is_joystick_haptic,
+   lhap_is_keyboard_haptic,
+   lhap_is_display_haptic,
+   lhap_is_touch_input_haptic,
+      
    lhap_get_from_mouse,
    lhap_get_from_joystick,
-   lhap_get_num_axes,
+   lhap_get_from_keyboard,
+   lhap_get_from_display,
+   lhap_get_from_touch_input,
+   
+   lhap_get_active,
+   lhap_get_capabilities,
+   lhap_get_gain,
+   lhap_set_gain,
+   lhap_get_num_effects,
+   
    lhap_is_effect_ok,
    lhap_upload_effect,
    lhap_play_effect,
    lhap_stop_effect,
-   lhap_is_effect_stopped,
+   lhap_is_effect_playing,
    lhap_stop_all_effects,
-   lhap_is_effect_playing
+   lhap_release_effect
 };
 
-
 ALLEGRO_HAPTIC_DRIVER * _al_haptic_driver = &hapdrv_linux;
-
-
 
 ALLEGRO_HAPTIC_DRIVER *_al_linux_haptic_driver(void)
 {
@@ -146,144 +162,49 @@ ALLEGRO_HAPTIC_DRIVER *_al_linux_haptic_driver(void)
 
 
 
-static unsigned                 num_haptics = 0;  
+// static unsigned                 num_haptics = 0;  
 /* number of haptics known to the user */
 static ALLEGRO_HAPTIC_LINUX     haptics[HAPTICS_MAX];
-static ALLEGRO_MUTEX          * haptic_mutex;
-#ifdef SUPPORT_HOTPLUG
+static ALLEGRO_MUTEX          * haptic_mutex = NULL;
 
-static int                      haptic_inotify_fd = -1;
-static int                      haptic_timer_fd = -1;
 
-#endif
-
-/* Approach: to find the available haptic devices, scan 
- * the /sys/class/input directory for any directory named eventxxx. 
- * Then read  /sys/class/input/event1/capabilities/ff to find out the 
- * capabilities of the device. If it's 0, then no it doesn't support force feedback.
- * The idea of this approach is that the /dev file doesn' t have to be opened
- * to inspect the existence of the haptic device. 
- */
-
-/*
- * Scans the /sys/class/input/ directory to find any haptic devices and 
- * already sets them up to be used if needed. Returns the amount of haptics found
- * or negative or error.
- */
-int lhap_scan_haptics(void) {
-  char buf[HAPTICS_BUF_MAX];
-  char line[HAPTICS_BUF_MAX];
-  glob_t found;
-  int res;
-  unsigned int index;
-  num_haptics = 0;
+static bool lhap_init_haptic(void) {
+  int index;
+  haptic_mutex = al_create_mutex();
+  if (!haptic_mutex) return false;
   for (index = 0; index < HAPTICS_MAX; index ++) {
-    haptics[index].in_use = 0;
-    haptics[index].fd     = -1;
-  }  
-  res         = glob("/sys/class/input/event*", GLOB_MARK, NULL, &found);
-  if (res == GLOB_NOMATCH) { 
-    globfree(&found);
-    return -ENOENT;
+    haptics[index].in_use = false;
   }
-  for (index = 0; index < found.gl_pathc; index ++) {
-    int scanres;
-    unsigned int capa = 0, extra = 0;
-    FILE * fin;
-    char * path = found.gl_pathv[index]; 
-    memset(buf, 0, HAPTICS_BUF_MAX);
-    snprintf(buf, HAPTICS_BUF_MAX, "%sdevice/capabilities/ff", path);
-    fin = fopen(buf, "r");
-    if(!fin) {  continue;  }
-    scanres = fscanf(fin, "%u%u", &capa, &extra);
-    fclose(fin);
-    
-    if (capa > 0) { 
-      char * devname = strchr(strchr(path + 1, '/') + 1, '/');
-      /* It's a haptic device. */
-      ALLEGRO_HAPTIC_LINUX * hap = haptics + num_haptics;
-      hap->parent.info.id        = num_haptics;
-      num_haptics++;
-      hap->flags     = capa;
-      snprintf(hap->device_name, HAPTICS_BUF_MAX, "/dev%s", devname);
-      hap->device_name[strlen(hap->device_name) -1] = '\0';
-      snprintf(buf, HAPTICS_BUF_MAX, "%sdevice/name", path);
-      fin = fopen(buf, "r");
-      if (!fin) {  continue;  }
-      if(fgets(line, HAPTICS_BUF_MAX, fin)) {
-        line[HAPTICS_BUF_MAX-1] = '\0';
-        line[strlen(line)]      = '\0';
-        strcpy(hap->name, line);      
-      }
-      fclose(fin);      
-      fprintf(stderr, "Haptic device found: %s (%s) (%s), %d %d %d\n", buf, hap->device_name, hap->name, scanres, capa, extra);
-      
+  
+  return true;
+}
+
+static ALLEGRO_HAPTIC_LINUX * lhap_get_available_haptic() {
+  int index;
+  haptic_mutex = al_create_mutex();
+  if(!haptic_mutex) return false;
+  for (index = 0; index < HAPTICS_MAX; index ++) {
+    if(!haptics[index].in_use) {
+      haptics[index].in_use = true;
+      return haptics + index;
     }
-    
-  }
-  globfree(&found);  
-  return num_haptics;
-} 
-
-
-bool lhap_init_haptic(void) {
-  return lhap_scan_haptics() >= 0;
-}
-
-
-void lhap_exit_haptic() {
-   return;
-}
-
-static bool lhap_reconfigure_haptics(void){
-  return 0;
-}
-
-int lhap_num_haptics() {
-  return num_haptics;
-}
-
-ALLEGRO_HAPTIC_LINUX * lhap_al2lin(ALLEGRO_HAPTIC * haptic) {
-  if(!haptic) return NULL;
-  ALLEGRO_HAPTIC_LINUX  * lhap = haptics + haptic->info.id;
-  /* Could also have used offsetof, but, hey... */
-  return lhap;
-}
-
-
-void lhap_release_haptic(ALLEGRO_HAPTIC * haptic) {
-  ALLEGRO_HAPTIC_LINUX  * lhap = lhap_al2lin(haptic);
-  ASSERT(haptic);
-  if (!lhap->in_use) return;
-  if (lhap->fd < 0) return;
-  close(lhap->fd);
-}
-
-
-ALLEGRO_HAPTIC * lhap_get_haptic(int index) {
-  ALLEGRO_HAPTIC_LINUX * lhap;
-  if(index >= HAPTICS_MAX) return NULL;
-  lhap = haptics + index;
-  if (!lhap->in_use) {
-    lhap->fd     = open(lhap->device_name, O_RDWR);
-    if(lhap->fd < 0 ) return NULL;
-    lhap->in_use = 1;
-    return &lhap->parent;
-  } else {
-    return &lhap->parent;
   }
   return NULL;
 }
 
-
-const char * lhap_get_name(ALLEGRO_HAPTIC * haptic) {
-  ALLEGRO_HAPTIC_LINUX * lhap = lhap_al2lin(haptic);
-  return lhap->name;
+/* Converts a generic haptic device to a linux specific one. */
+static ALLEGRO_HAPTIC_LINUX * lhap_from_al(ALLEGRO_HAPTIC * hap) {
+  void * ptr = hap;
+  if (!ptr) return NULL;
+  return (ALLEGRO_HAPTIC_LINUX *) (ptr - offsetof(ALLEGRO_HAPTIC_LINUX, parent));
 }
 
-int lhap_get_flags(ALLEGRO_HAPTIC * haptic) {
-  ALLEGRO_HAPTIC_LINUX * lhap = lhap_al2lin(haptic);
-  return lhap->flags;
+
+
+
+static void lhap_exit_haptic() {
+  al_destroy_mutex(haptic_mutex);
+  return;
 }
 
 
@@ -328,13 +249,26 @@ static bool lhap_time2lin(__u16 * res, double sec) {
   
   if (sec < 0.0)        return false; 
   if (sec > 32.767)     return false;
-  return (__u16) round(sec * 1000.0);
+  (*res) = (__u16) round(sec * 1000.0);
+  return true;
 }
 
+/* converts the time in seconds to a linux compatible time. 
+ * Return false if out of bounds. This one allows negative times. */
+static bool lhap_stime2lin(__s16 * res, double sec) {
+  ASSERT(res); 
+  
+  if (sec < -32.767)    return false; 
+  if (sec > 32.767)     return false;
+  (*res) = (__s16) round(sec * 1000.0);
+  return true;
+}
+
+
 /* Converts replay data to linux. */
-static bool lhap_replay2lin(struct ff_replay * lin, ALLEGRO_HAPTIC_REPLAY * al) {
-  if(!lhap_time2lin(&lin.delay, al.delay))  return false;
-  if(!lhap_time2lin(&lin.length, al.length)) return false;
+static bool lhap_replay2lin(struct ff_replay * lin, struct ALLEGRO_HAPTIC_REPLAY * al) {
+  if(!lhap_time2lin(&lin->delay, al->delay))  return false;
+  if(!lhap_time2lin(&lin->length, al->length)) return false;
   return true;
 }
 
@@ -344,96 +278,450 @@ static bool lhap_level2lin(__u16 * res, double level) {
   ASSERT(res);   
   if (level < 0.0)        return false; 
   if (level > 1.0)        return false;
-  return (__u16) round(level * ((double) 0x7fff));
+  (*res) = (__u16) round(level * ((double) 0x7fff));
+  return true;
+}
+
+
+/* Converts the level in range -1.0 to 1.0 to a linux compatible level. 
+ * Returns false if out of bounds. */
+static bool lhap_slevel2lin(__s16 * res, double level) {
+  ASSERT(res);   
+  if (level < -1.0)        return false; 
+  if (level > 1.0)        return false;
+  (*res) = (__s16) round(level * ((double) 0x7ffe));
+  return true;
+}
+
+
+/* Converts an allegro haptic effect envelope to the linux structure. */
+static bool lhap_envelope2lin(struct ff_envelope * lin, struct ALLEGRO_HAPTIC_ENVELOPE * al) {
+  if (!lhap_time2lin(&lin->attack_length, al->attack_length)) return false;
+  if (!lhap_time2lin(&lin->fade_length  , al->fade_length)) return false;
+  if (!lhap_level2lin(&lin->attack_level, al->attack_level)) return false;
+  if (!lhap_level2lin(&lin->fade_level, al->fade_level)) return false;
+  return true;
 }
 
 /* Converts a rumble effect to linux. */
-static bool lhap_rumble2lin(struct ff_rumble_effect * lin, ALLEGRO_HAPTIC_RUMBLE_EFFECT * al) {
+static bool lhap_rumble2lin(struct ff_rumble_effect * lin, struct ALLEGRO_HAPTIC_RUMBLE_EFFECT * al) {
   if(!lhap_level2lin(&lin->strong_magnitude, al->strong_magnitude)) return false;
   if(!lhap_level2lin(&lin->weak_magnitude  , al->weak_magnitude)) return false;
   return true;
 }
 
+
+/* Converts a constant effect to linux. */
+static bool lhap_constant2lin(struct ff_constant_effect * lin, struct ALLEGRO_HAPTIC_CONSTANT_EFFECT * al) {
+  if(!lhap_envelope2lin(&lin->envelope , &al->envelope)) return false;
+  if(!lhap_slevel2lin(&lin->level, al->level)) return false;  
+  return true;
+}
+
+/* Converts a ramp effect to linux. */
+static bool lhap_ramp2lin(struct ff_ramp_effect * lin, struct ALLEGRO_HAPTIC_RAMP_EFFECT * al) {
+  if(!lhap_envelope2lin(&lin->envelope , &al->envelope)) return false;
+  if(!lhap_slevel2lin(&lin->start_level, al->start_level)) return false;
+  if(!lhap_slevel2lin(&lin->end_level, al->end_level)) return false;
+  return true;
+}
+
+/* Converts a ramp effect to linux. */
+static bool lhap_condition2lin(struct ff_condition_effect * lin, struct ALLEGRO_HAPTIC_CONDITION_EFFECT * al) {
+  if(!lhap_slevel2lin(&lin->center      , al->center)) return false;
+  if(!lhap_level2lin(&lin->deadband    , al->deadband)) return false;
+  if(!lhap_slevel2lin(&lin->right_coeff , al->right_coeff)) return false;
+  if(!lhap_level2lin(&lin->right_saturation , al->right_saturation)) return false;  
+  if(!lhap_slevel2lin(&lin->left_coeff  , al->left_coeff)) return false;
+  if(!lhap_level2lin(&lin->left_saturation , al->left_saturation)) return false;
+  return true;
+}
+
+
 /* converts a periodic effect  to linux */
-static bool lhap_periodic2lin(struct ff_periodic_effect * lin, ALLEGRO_HAPTIC_PERIODIC_EFFECT * al) {
-  
+static bool lhap_periodic2lin(struct ff_periodic_effect * lin, struct ALLEGRO_HAPTIC_PERIODIC_EFFECT * al) {
+  if(!lhap_slevel2lin(&lin->magnitude, al->magnitude)) return false;
+  if(!lhap_stime2lin(&lin->offset, al->offset)) return false;
+  if(!lhap_time2lin(&lin->period, al->period)) return false;
+  if(!lhap_time2lin(&lin->phase, al->phase)) return false;
+  if(!lhap_wave2lin(&lin->waveform, al->waveform)) return false; 
+  if (al->custom_data) {
+    /* Custom data is not supported yet, because currently no Linux 
+     * haptic driver supports it. 
+     */
+    return false;
+  }
+  if(!lhap_envelope2lin(&lin->envelope , &al->envelope)) return false;
   return true;
 }
 
 /* Converts allegro haptic effect to linux haptic effect. */
 static bool lhap_effect2lin(struct ff_effect * lin, ALLEGRO_HAPTIC_EFFECT * al) {
-  if(!lhap_type2lin(&lin->type, al->type,) return false;
+  if(!lhap_type2lin(&lin->type, al->type)) return false;
   /* lin_effect->replay = effect->re; */
   lin->direction = (__u16) round(((double)0xC000 * al->direction.angle) / (2 * M_PI));
   lin->id        = -1;
-  if(!lhap_replay2lin(&lin->replay, &al->replay);
+  if(!lhap_replay2lin(&lin->replay, &al->replay)) return false;
   switch(lin->type) {
     case FF_RUMBLE:
-      if(!lhap_rumble2lin(&lin->rumble, &al->rumble);
+      if(!lhap_rumble2lin(&lin->u.rumble, &al->data.rumble)) return false;
       break;
     case FF_PERIODIC:      
-      if(!lhap_periodic2lin(&lin->periodic, al->data.periodic)) return false;
+      if(!lhap_periodic2lin(&lin->u.periodic, &al->data.periodic)) return false;
       break;
-      
+    case FF_CONSTANT: 
+      if(!lhap_constant2lin(&lin->u.constant, &al->data.constant)) return false;
+      break;
+    
+    case FF_RAMP:
+    if(!lhap_ramp2lin(&lin->u.ramp, &al->data.ramp)) return false;
+      break;
+    
+    case FF_SPRING:
+    case FF_FRICTION:
+    case FF_DAMPER:
+    case FF_INERTIA:      
+      if(!lhap_condition2lin(&lin->u.condition[0],  &al->data.condition)) return false;
+    break;
+    default:
+      return false;      
   }
      
-  return false;
+  return true;
 }
 
 
 
 static bool lhap_get_active(ALLEGRO_HAPTIC * haptic) {
-  ALLEGRO_HAPTIC_LINUX * lhap = lhap_al2lin(haptic);
+  ALLEGRO_HAPTIC_LINUX * lhap = lhap_from_al(haptic);
   return lhap->in_use;
 }
 
 static bool lhap_is_mouse_haptic(ALLEGRO_MOUSE * mouse) {
+  (void) mouse;
   return false;
 }
+
+#define LONG_BITS (sizeof(long) * 8)
+#define NLONGS(x) (((x) + LONG_BITS - 1) / LONG_BITS)
+/* Tests if a bit in an array of longs is set. */
+#define TEST_BIT(nr, addr) \
+    (((1UL << ((nr) % (sizeof(long) * 8))) & ((addr)[(nr) / (sizeof(long) * 8)])) != 0)
+
+bool lhap_fd_can_ff(int fd) 
+{
+  long bitmask[NLONGS(EV_CNT)]   = {0};
+      
+  if (ioctl (fd, EVIOCGBIT(0, sizeof(bitmask)), bitmask) < 0) {
+    return false;
+  }
+  if (TEST_BIT(EV_FF, bitmask)) {
+     return true;
+  }
+  return false;
+}
+
+
+
 
 static bool lhap_is_joystick_haptic(ALLEGRO_JOYSTICK * joy) {
-   return false;
+  // int newfd = -1;
+  ALLEGRO_JOYSTICK_LINUX * ljoy = (ALLEGRO_JOYSTICK_LINUX *) joy;
+  if (!al_is_joystick_installed())      return false;
+  if (!al_get_joystick_active(joy))     return false;  
+  if (ljoy->fd <= 0)                    return false; 
+  // al_cstr(ljoy->device_name)
+  // newfd = open("/dev/input/event8", O_RDWR);  
+  // close(newfd);
+  return lhap_fd_can_ff(ljoy->fd); 
 }
 
-static ALLEGRO_HAPTIC *  lhap_get_from_mouse(ALLEGRO_MOUSE * mouse) {
-  return NULL;
-}
-
-static ALLEGRO_HAPTIC *  lhap_get_from_joystick(ALLEGRO_JOYSTICK * joy) {
-  return NULL;
-}
-
-static int lhap_get_num_axes(ALLEGRO_HAPTIC * haptic) {
-  return 1;
-}
-
-static bool lhap_is_effect_ok(ALLEGRO_HAPTIC * haptic, ALLEGRO_HAPTIC_EFFECT * effect) {
-   return false;
-}
-
-static bool lhap_upload_effect(ALLEGRO_HAPTIC * haptic, ALLEGRO_HAPTIC_EFFECT * effect, int * playid) {
+static bool lhap_is_display_haptic (ALLEGRO_DISPLAY * dev) {
+  (void) dev;
   return false;
 }
 
-static bool lhap_play_effect(ALLEGRO_HAPTIC * haptic, int repeats, int playid) {
-  return false;  
-}
-
-static bool lhap_stop_effect(ALLEGRO_HAPTIC * haptic, int playid) {
+static bool lhap_is_keyboard_haptic (ALLEGRO_KEYBOARD * dev) {
+  (void) dev;
   return false;
 }
 
-static bool lhap_is_effect_stopped(ALLEGRO_HAPTIC * haptic, int playid) {
+static bool lhap_is_touch_input_haptic (ALLEGRO_TOUCH_INPUT * dev) {
+  (void) dev;
+  return false;
+}
+
+
+static ALLEGRO_HAPTIC *  lhap_get_from_mouse(ALLEGRO_MOUSE * mouse) 
+{
+  (void) mouse;
+  return NULL;
+}
+
+
+#define TEST_CAPA(BIT, MASK, CAP, ALCAPA) do { \
+  if (TEST_BIT(FF_PERIODIC, bitmask)) { cap |= ALCAPA; } \
+} while (0)
+  
+
+static bool get_haptic_capabilities(int fd, int * capabilities) {
+
+  int cap = 0;
+  // unsigned long device_bits[(EV_MAX + 8) / sizeof(unsigned long)];  
+  unsigned long bitmask[NLONGS(FF_CNT)]   = {0};
+  if (ioctl (fd, EVIOCGBIT(EV_FF, sizeof(bitmask)), bitmask) < 0) {
+    perror ("EVIOCGBIT ioctl failed");
+    fprintf(stderr, "For fd %d\n", fd);
+    return false;
+  }
+  TEST_CAPA(FF_PERIODIC, bitmask, cap, ALLEGRO_HAPTIC_PERIODIC); 
+  TEST_CAPA(FF_RUMBLE, bitmask, cap, ALLEGRO_HAPTIC_RUMBLE); 
+  TEST_CAPA(FF_CONSTANT, bitmask, cap, ALLEGRO_HAPTIC_CONSTANT);
+  TEST_CAPA(FF_SPRING, bitmask, cap, ALLEGRO_HAPTIC_SPRING); 
+  TEST_CAPA(FF_FRICTION, bitmask, cap, ALLEGRO_HAPTIC_FRICTION);   
+  TEST_CAPA(FF_DAMPER, bitmask, cap, ALLEGRO_HAPTIC_DAMPER);   
+  TEST_CAPA(FF_INERTIA, bitmask, cap, ALLEGRO_HAPTIC_INERTIA); 
+  TEST_CAPA(FF_RAMP, bitmask, cap, ALLEGRO_HAPTIC_RAMP); 
+  TEST_CAPA(FF_SQUARE, bitmask, cap, ALLEGRO_HAPTIC_SQUARE); 
+  TEST_CAPA(FF_TRIANGLE, bitmask, cap, ALLEGRO_HAPTIC_TRIANGLE); 
+  TEST_CAPA(FF_SINE, bitmask, cap, ALLEGRO_HAPTIC_SINE); 
+  TEST_CAPA(FF_SAW_UP, bitmask, cap, ALLEGRO_HAPTIC_SAW_UP); 
+  TEST_CAPA(FF_SAW_DOWN, bitmask, cap, ALLEGRO_HAPTIC_SAW_DOWN); 
+  TEST_CAPA(FF_CUSTOM, bitmask, cap, ALLEGRO_HAPTIC_CUSTOM); 
+  TEST_CAPA(FF_GAIN, bitmask, cap, ALLEGRO_HAPTIC_GAIN); 
+  
+  (*capabilities) = cap;
+  
   return true;
 }
 
-static bool lhap_stop_all_effects(ALLEGRO_HAPTIC * haptic) {
+static ALLEGRO_HAPTIC *  lhap_get_from_joystick(ALLEGRO_JOYSTICK * joy) 
+{
+  int index;
+  ALLEGRO_HAPTIC_LINUX *lhap;
+  ALLEGRO_JOYSTICK_LINUX * ljoy = (ALLEGRO_JOYSTICK_LINUX *) joy;
+  
+  if (!al_is_joystick_haptic(joy)) return NULL;  
+  
+  al_lock_mutex(haptic_mutex);
+  
+  lhap = lhap_get_available_haptic();
+  if (!lhap) return NULL;
+  
+  lhap->parent.device = joy; 
+  lhap->parent.from   = _AL_HAPTIC_FROM_JOYSTICK;
+  
+  
+  lhap->fd            = ljoy->fd;
+  lhap->in_use        = true;
+  for (index = 0; index < HAPTICS_EFFECTS_MAX; index ++) {
+    lhap->effects[index] = -1; // negative means not in use. 
+  }
+  lhap->parent.gain   = 1.0;
+  get_haptic_capabilities(lhap->fd, &lhap->flags);
+  al_unlock_mutex(haptic_mutex);
+  return &(lhap->parent);
+}
+
+static ALLEGRO_HAPTIC * lhap_get_from_display (ALLEGRO_DISPLAY * dev) 
+{
+  (void) dev;
+  return NULL;
+}
+
+static  ALLEGRO_HAPTIC * lhap_get_from_keyboard (ALLEGRO_KEYBOARD * dev) 
+{
+  (void) dev;
+  return NULL;
+}
+
+static ALLEGRO_HAPTIC * lhap_get_from_touch_input (ALLEGRO_TOUCH_INPUT * dev) 
+{
+  (void) dev;
+  return NULL;
+}
+
+
+static int lhap_get_capabilities (ALLEGRO_HAPTIC * dev) 
+{
+  ALLEGRO_HAPTIC_LINUX * lhap = lhap_from_al(dev);
+  return lhap->flags;
+}
+
+
+static double lhap_get_gain(ALLEGRO_HAPTIC * dev) {
+  (void) dev;
+  ALLEGRO_HAPTIC_LINUX * lhap = lhap_from_al(dev);
+  /* Unfortunately there seems to be no API to GET gain, only to set?! 
+   * So, retururn the stored gain.
+   */
+  return lhap->parent.gain;
+}
+
+static bool lhap_set_gain(ALLEGRO_HAPTIC * dev, double gain) {  
+  ALLEGRO_HAPTIC_LINUX * lhap = lhap_from_al(dev);
+  struct input_event ie ;  
+  lhap->parent.gain     = gain;
+  timerclear(&ie.time); 
+  ie.type     = EV_FF;
+  ie.code     = FF_GAIN;
+  ie.value    =  (__s32)((double)0xFFFF * gain);
+  if (write(lhap->fd, &ie, sizeof(ie)) < 0) {
+    return false;
+  }
+  return true;
+}
+
+int lhap_get_num_effects (ALLEGRO_HAPTIC * dev) {
+  ALLEGRO_HAPTIC_LINUX * lhap = lhap_from_al(dev);
+  int n_effects; /* Number of effects the device can play at the same time */
+  
+  if (ioctl(lhap->fd, EVIOCGEFFECTS, &n_effects) < 0) {
+    perror("Cannot check amount of effects");
+    fprintf(stderr, "on FD %d\n", lhap->fd);
+    return HAPTICS_EFFECTS_MAX;
+  } 
+  if (n_effects > HAPTICS_EFFECTS_MAX) return HAPTICS_EFFECTS_MAX;
+  return n_effects;
+}
+
+
+static bool lhap_is_effect_ok(ALLEGRO_HAPTIC * haptic, ALLEGRO_HAPTIC_EFFECT * effect) {
+  struct ff_effect leff;
+  int caps = al_get_haptic_capabilities(haptic);
+  if(!((caps & effect->type) == effect->type)) return false;  
+  if(!lhap_effect2lin(&leff, effect)) return false;
+  return true;  
+}
+
+static double lhap_effect_duration(ALLEGRO_HAPTIC_EFFECT * effect) {
+  return effect->replay.delay + effect->replay.length;   
+}
+
+
+static bool lhap_upload_effect(ALLEGRO_HAPTIC * dev, ALLEGRO_HAPTIC_EFFECT * effect, ALLEGRO_HAPTIC_EFFECT_ID * id) { 
+  ALLEGRO_HAPTIC_LINUX * lhap = lhap_from_al(dev);
+  struct ff_effect leff;
+  int index;
+  int found = -1;
+  
+  ASSERT(dev);
+  ASSERT(id);
+  ASSERT(effect);
+  
+  /* set id's values to indicate failure. */
+  id->_haptic   = NULL;
+  id->_effect   = NULL;
+  id->_id       = -1;
+  id->_handle   = -1;
+  
+  
+  if(!lhap_effect2lin(&leff, effect)) { 
+    return false;
+  }
+  
+  leff.id = -1;
+  
+  /* Find empty spot for effect . */
+  for(index = 0; index < al_get_num_haptic_effects(dev); index ++) {
+    if(lhap->effects[index] < 0) {
+      found = index; 
+      break;
+    }
+  }
+  
+  /* No more space for an effect. */
+  if(found < 0) {
+    return false;
+  }
+  
+  /* Upload effect. */
+  if (ioctl(lhap->fd, EVIOCSFF, &leff) < 0 ) {
+    return false;
+  }
+  
+  id->_haptic   = dev;
+  id->_effect   = effect;
+  id->_id       = found;
+  id->_handle   = leff.id;
+  id->_playing  = false;
+    
+  return true;
+}
+
+static bool lhap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID * id, int loops) {
+  struct input_event     play;
+  ALLEGRO_HAPTIC_LINUX * lhap = (ALLEGRO_HAPTIC_LINUX *) id->_haptic;    
+  int fd                     ;
+  
+  if(!lhap) return false; 
+  
+  fd = lhap->fd;
+  
+  timerclear(&play.time);
+  play.type     = EV_FF;
+  play.code     = id->_handle; 
+  loops         = (loops < 0 ) ? 1 : loops; 
+  play.value    = loops; /* play: 1, stop: 0 */
+   
+  if (write(fd, (const void*) &play, sizeof(play)) < 0) {    
+    perror("Effect play failed.");
+    return false;
+  }
+  id->_playing = true;
+  id->_started = al_get_time(); 
+  id->_loops   = loops;
+  
+  return true;  
+}
+
+static bool lhap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID * id) {
+  struct input_event play;
+  ALLEGRO_HAPTIC_LINUX * lhap = (ALLEGRO_HAPTIC_LINUX *) id->_haptic;    
+  int loops                   = 0;
+  
+  if(!lhap) return false; 
+  
+   
+  play.type     = EV_FF;
+  play.code     = id->_handle; 
+  loops         = (loops < 0 ) ? 1 : loops;
+  
+  if (write(lhap->fd, (const void*) &play, sizeof(play)) < 0) {
+    return false;
+  }
+  id->_playing  = false;
+  return true;   
+}
+
+static bool lhap_stop_all_effects(ALLEGRO_HAPTIC * haptic) {  
+  ALLEGRO_HAPTIC_LINUX * lhap = (ALLEGRO_HAPTIC_LINUX *) haptic;    
+  
+  
   return false;
 }
 
-static bool lhap_is_effect_playing(ALLEGRO_HAPTIC * haptic, int playid) {
+static bool lhap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID * id) {  
+  double duration;
+  ASSERT(id); 
+  
+  if(!id->_playing) return false;
+  /* Since there is no Linux api to test this, use a timer to check if the 
+   effect has been playing longe enough to be finsihed or not. */
+  duration = lhap_effect_duration(id->_effect) * id->_loops;
+  if((id->_started + duration) >= al_get_time()) return true;  
   return false;
 }
 
+static bool lhap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID * id) {
+  ALLEGRO_HAPTIC_LINUX * lhap =  (ALLEGRO_HAPTIC_LINUX *) id->_haptic;  
+  lhap_stop_effect(id);
+  
+  if (ioctl(lhap->fd, EVIOCRMFF, id->_handle) < 0) {
+    return false;
+  }  
+  lhap->effects[id->_id] = -1; // negative means not in use.
+  return true;
+}
 
 
