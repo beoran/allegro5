@@ -214,7 +214,6 @@ static bool have_joystick_axis(int fd)
 }
 
 
-
 static bool ljoy_detect_device_name(int num, ALLEGRO_USTR *device_name)
 {
    ALLEGRO_CONFIG *cfg;
@@ -312,6 +311,26 @@ static void inactivate_joy(ALLEGRO_JOYSTICK_LINUX *joy)
 
    al_ustr_free(joy->device_name);
    joy->device_name = NULL;
+}
+
+
+static bool get_num_buttons(int fd, int * num_buttons)
+{
+    unsigned long key_bits[NLONGS(KEY_CNT)]  = {0};
+    int nbut = 0;
+    
+    int res, i;
+ 
+    res = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits);
+    if (res < 0) return false;
+    
+    for (i = BTN_MISC ; i <= KEY_MAX; i++) {
+      if(TEST_BIT(i, key_bits)) {
+          nbut++;
+      }
+    }
+    (*num_buttons) = nbut;
+    return true;
 }
 
 
