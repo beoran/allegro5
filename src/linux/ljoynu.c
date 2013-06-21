@@ -41,6 +41,7 @@
  */
 #include <sys/types.h>
 #include <linux/joystick.h>
+#include <linux/input.h>
 
 #if defined(ALLEGRO_HAVE_SYS_INOTIFY_H) && defined(ALLEGRO_HAVE_SYS_TIMERFD_H)
    #define SUPPORT_HOTPLUG
@@ -50,47 +51,7 @@
 
 ALLEGRO_DEBUG_CHANNEL("ljoy");
 
-#define TOTAL_JOYSTICK_AXES  (_AL_MAX_JOYSTICK_STICKS * _AL_MAX_JOYSTICK_AXES)
-
-
-/* State transitions:
- *    unused -> born
- *    born -> alive
- *    born -> dying
- *    active -> dying
- *    dying -> unused
- */
-typedef enum {
-   LJOY_STATE_UNUSED,
-   LJOY_STATE_BORN,
-   LJOY_STATE_ALIVE,
-   LJOY_STATE_DYING
-} CONFIG_STATE;
-
-#define ACTIVE_STATE(st) \
-   ((st) == LJOY_STATE_ALIVE || (st) == LJOY_STATE_DYING)
-
-
-/* map a Linux joystick axis number to an Allegro (stick,axis) pair */
-typedef struct {
-   int stick;
-   int axis;
-} AXIS_MAPPING;
-
-
-typedef struct ALLEGRO_JOYSTICK_LINUX
-{
-   ALLEGRO_JOYSTICK parent;
-   int config_state;
-   bool marked;
-   int fd;
-   ALLEGRO_USTR *device_name;
-
-   AXIS_MAPPING axis_mapping[TOTAL_JOYSTICK_AXES];
-   ALLEGRO_JOYSTICK_STATE joystate;
-   char name[100];
-} ALLEGRO_JOYSTICK_LINUX;
-
+#include "allegro5/internal/aintern_ljoynu.h"
 
 
 /* forward declarations */
@@ -139,32 +100,41 @@ static int timer_fd = -1;
 #endif
 
 
-/* check_js_api_version: [primary thread]
+
+#define LONG_BITS (sizeof(long) * 8)
+#define NLONGS(x) (((x) + LONG_BITS - 1) / LONG_BITS)
+/* Tests if a bit in an array of longs is set. */
+#define TEST_BIT(nr, addr) \
+    (((1UL << ((nr) % (sizeof(long) * 8))) & ((addr)[(nr) / (sizeof(long) * 8)])) != 0)
+
+/* check_is_event_joystick: 
  *
- *  Return true if the joystick API used by the device is supported by
- *  this driver.
+ *  Return true if this fd supports the /dev/inputt/eventxx API and 
+ * is a joystick indeed.
  */
-static bool check_js_api_version(int fd)
-{
-   unsigned int raw_version;
+static bool check_is_event_joystick(int fd) {
 
-   if (ioctl(fd, JSIOCGVERSION, &raw_version) < 0) {
-      /* NOTE: IOCTL fails if the joystick API is version 0.x */
-      ALLEGRO_WARN("Your Linux joystick API is version 0.x which is unsupported.\n");
-      return false;
+  
+  // unsigned long device_bits[(EV_MAX + 8) / sizeof(unsigned long)];  
+  unsigned long bitmask[NLONGS(EV_CNT)]   = {0};
+  
+  if (ioctl (fd, EVIOCGBIT(0, sizeof(bitmask)), bitmask) < 0) {
+    perror ("EVIOCGBIT ioctl failed");
+    fprintf(stderr, "For fd %d\n", fd);
+    return false;
+  }
+  /* If we see buttons and axes, it's most likely a joystick */
+   if (TEST_BIT(EV_ABS, bitmask) && TEST_BIT(EV_KEY, bitmask)) {   
+     return true;
    }
-
-   /*
-   struct { unsigned char build, minor, major; } version;
-
-   version.major = (raw_version & 0xFF0000) >> 16;
-   version.minor = (raw_version & 0xFF00) >> 8;
-   version.build = (raw_version & 0xFF);
-   */
-
-   return true;
+   
+   /* Force feedback device is always a joystick. */
+   if (TEST_BIT(EV_FF, bitmask)) {
+     return true;
+   }
+   
+   return false;
 }
-
 
 
 static bool ljoy_detect_device_name(int num, ALLEGRO_USTR *device_name)
@@ -185,7 +155,7 @@ static bool ljoy_detect_device_name(int num, ALLEGRO_USTR *device_name)
    }
 
    if (al_ustr_size(device_name) == 0)
-      al_ustr_appendf(device_name, "/dev/input/js%d", num);
+      al_ustr_appendf(device_name, "/dev/input/event%d", num);
 
    return (stat(al_cstr(device_name), &stbuf) == 0);
 }
@@ -267,6 +237,26 @@ static void inactivate_joy(ALLEGRO_JOYSTICK_LINUX *joy)
 }
 
 
+static bool get_num_buttons(int fd, int * num_buttons)
+{
+    unsigned long key_bits[NLONGS(KEY_CNT)]  = {0};
+    int nbut = 0;
+    
+    int res, i;
+ 
+    res = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits);
+    if (res < 0) return false;
+    
+    for (i = BTN_MISC ; i <= KEY_MAX; i++) {
+      if(TEST_BIT(i, key_bits)) {
+          nbut++;
+      }
+    }
+    (*num_buttons) = nbut;
+    return true;
+}
+
+
 
 static void ljoy_scan(bool configure)
 {
@@ -285,8 +275,8 @@ static void ljoy_scan(bool configure)
 
    device_name = al_ustr_new("");
 
-   /* This is a big number, but there can be gaps. */
-   for (num = 0; num < 16; num++) {
+   /* This is a big number, but there can be gaps, and other unrelated event queues. */
+   for (num = 0; num < 32; num++) {
       if (!ljoy_detect_device_name(num, device_name))
          continue;
 
@@ -297,16 +287,20 @@ static void ljoy_scan(bool configure)
          continue;
       }
 
-      /* Try to open the device. */
-      fd = open(al_cstr(device_name), O_RDONLY|O_NONBLOCK);
+      /* Try to open the device. The device must be pened in O_RDWR mode to allow 
+       * writing of haptic effects! The haptic driver for linux 
+       * reuses the joystick driver's FD. */
+      fd = open(al_cstr(device_name), O_RDWR|O_NONBLOCK);
       if (fd == -1) {
          ALLEGRO_WARN("Failed to open device %s\n", al_cstr(device_name));
          continue;
       }
-      if (!check_js_api_version(fd)) {
+ 
+      if (!check_is_event_joystick(fd)) {
          close(fd);
          continue;
       }
+ 
       ALLEGRO_DEBUG("Device %s is new\n", al_cstr(device_name));
 
       joy = ljoy_allocate_structure();
@@ -316,76 +310,94 @@ static void ljoy_scan(bool configure)
       joy->marked = true;
       config_needs_merging = true;
 
-      if (ioctl(fd, JSIOCGNAME(sizeof(joy->name)), joy->name) < 0)
+      if (ioctl(fd, EVIOCGNAME(sizeof(joy->name)), joy->name) < 0)
          strcpy(joy->name, "Unknown");
 
       /* Fill in the joystick information fields. */
       {
-         char num_axes;
-         char num_buttons;
-         int throttle;
-         int s, a, b;
+         int num_axes = 0;
+         int num_buttons;
+         int b;
+         unsigned long abs_bits[NLONGS(ABS_CNT)]  = {0};
+         int res, i;  
+         int stick = 0;
+         int axis  = 0;
+         
    
-         ioctl(fd, JSIOCGAXES, &num_axes);
-         ioctl(fd, JSIOCGBUTTONS, &num_buttons);
-   
-         if (num_axes > TOTAL_JOYSTICK_AXES)
-            num_axes = TOTAL_JOYSTICK_AXES;
+         // get_num_axes(fd, &num_axes);
+         get_num_buttons(fd, &num_buttons);
    
          if (num_buttons > _AL_MAX_JOYSTICK_BUTTONS)
             num_buttons = _AL_MAX_JOYSTICK_BUTTONS;
-   
-         /* XXX use configuration system when we get one */
-         throttle = -1;
-   #if 0
-         /* User is allowed to override our simple assumption of which
-          * axis number (kernel) the throttle is located at. */
-         snprintf(tmp, sizeof(tmp), "throttle_axis_%d", num);
-         throttle = get_config_int("joystick", tmp, -1);
-         if (throttle == -1) {
-            throttle = get_config_int("joystick", 
-                                      "throttle_axis", -1);
-         }
-   #endif
-   
-         /* Each pair of axes is assumed to make up a stick unless it 
-          * is the sole remaining axis, or has been user specified, in 
-          * which case it is a throttle. */
-   
-         for (s = 0, a = 0;
-              s < _AL_MAX_JOYSTICK_STICKS && a < num_axes;
-              s++)
-         {
-            if ((a == throttle) || (a == num_axes-1)) {
-               /* One axis throttle. */
-               joy->parent.info.stick[s].flags = ALLEGRO_JOYFLAG_ANALOGUE;
-               joy->parent.info.stick[s].num_axes = 1;
-               joy->parent.info.stick[s].axis[0].name = "Throttle";
-               char *name = joy->parent.info.stick[s].axis[0].name;
-               joy->parent.info.stick[s].name = al_malloc(strlen(name) + 1);
-               strcpy(joy->parent.info.stick[s].name, name);
-               joy->axis_mapping[a].stick = s;
-               joy->axis_mapping[a].axis = 0;
-               a++;
+         
+         /* Scan the axes to get their properties. */
+        res = ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs_bits)), abs_bits);    
+        if (res < 0) continue;
+        for (i = 0; i <= ABS_MISC; i++) {
+          if(TEST_BIT(i, abs_bits)) {
+          struct input_absinfo absinfo;
+          if (ioctl(fd, EVIOCGABS(i), &absinfo) < 0)
+                    continue;
+            if (
+                 (i == ABS_THROTTLE) || (i == ABS_RUDDER) || (i == ABS_WHEEL) 
+              || (i == ABS_GAS)      || (i == ABS_BRAKE) || (i== ABS_BRAKE) 
+              || (i == ABS_PRESSURE) || (i == ABS_DISTANCE) || (i== ABS_TOOL_WIDTH) 
+            ) { 
+              /* One axis throttle. */
+               joy->parent.info.stick[stick].flags = ALLEGRO_JOYFLAG_ANALOGUE;
+               joy->parent.info.stick[stick].num_axes = 1;
+               joy->parent.info.stick[stick].axis[0].name = "Throttle";
+               char *name = joy->parent.info.stick[stick].axis[0].name;
+               joy->parent.info.stick[stick].name = al_malloc(strlen(name) + 1);
+               strcpy(joy->parent.info.stick[stick].name, name);
+               joy->axis_mapping[i].stick = stick;
+               joy->axis_mapping[i].axis  = 0;
+               joy->axis_mapping[i].min   = absinfo.minimum;
+               joy->axis_mapping[i].max   = absinfo.maximum;
+               joy->axis_mapping[i].value = absinfo.value;
+               joy->axis_mapping[i].fuzz  = absinfo.fuzz;
+               joy->axis_mapping[i].flat  = absinfo.flat;
+              /* Consider all these types of axis as throttle axis. */
+               stick++;
+            } else { /* regular axis, two axis stick. */
+              int digital = ((i >= ABS_HAT0X) && (i <=  ABS_HAT3Y));
+               if (axis == 0) { /* first axis of new joystick */
+                if (digital) {
+                  joy->parent.info.stick[stick].flags = ALLEGRO_JOYFLAG_DIGITAL;
+                } else { 
+                  joy->parent.info.stick[stick].flags = ALLEGRO_JOYFLAG_ANALOGUE;
+                }
+                joy->parent.info.stick[stick].num_axes = 2;
+                joy->parent.info.stick[stick].axis[0].name = "X";
+                joy->parent.info.stick[stick].axis[1].name = "Y";
+                joy->parent.info.stick[stick].name = al_malloc (32);
+                snprintf((char *)joy->parent.info.stick[stick].name, 32, "Stick %d", stick+1);
+                joy->axis_mapping[i].stick = stick;
+                joy->axis_mapping[i].axis  = axis;
+                joy->axis_mapping[i].min   = absinfo.minimum;
+                joy->axis_mapping[i].max   = absinfo.maximum;
+                joy->axis_mapping[i].value = absinfo.value;
+                joy->axis_mapping[i].fuzz  = absinfo.fuzz;
+                joy->axis_mapping[i].flat  = absinfo.flat;                
+                axis++;
+               } else { /* Second axis. */
+                joy->axis_mapping[i].stick = stick;
+                joy->axis_mapping[i].axis  = axis;
+                joy->axis_mapping[i].min   = absinfo.minimum;
+                joy->axis_mapping[i].max   = absinfo.maximum;
+                joy->axis_mapping[i].value = absinfo.value;
+                joy->axis_mapping[i].fuzz  = absinfo.fuzz;
+                joy->axis_mapping[i].flat  = absinfo.flat;
+                stick++;
+                axis = 0;
+               }
             }
-            else {
-               /* Two axis stick. */
-               joy->parent.info.stick[s].flags = ALLEGRO_JOYFLAG_ANALOGUE;
-               joy->parent.info.stick[s].num_axes = 2;
-               joy->parent.info.stick[s].axis[0].name = "X";
-               joy->parent.info.stick[s].axis[1].name = "Y";
-               joy->parent.info.stick[s].name = al_malloc (32);
-               snprintf((char *)joy->parent.info.stick[s].name, 32, "Stick %d", s+1);
-               joy->axis_mapping[a].stick = s;
-               joy->axis_mapping[a].axis = 0;
-               a++;
-               joy->axis_mapping[a].stick = s;
-               joy->axis_mapping[a].axis = 1;
-               a++;
-            }
-         }
+            num_axes++;
+          }
+        }
+    
    
-         joy->parent.info.num_sticks = s;
+        joy->parent.info.num_sticks = stick;
    
          /* Do the buttons. */
    
@@ -710,44 +722,52 @@ static void ljoy_process_new_data(void *data)
    
    _al_event_source_lock(es);
    {
-      struct js_event js_events[32];
+      struct input_event input_events[32];
       int bytes, nr, i;
 
-      while ((bytes = read(joy->fd, &js_events, sizeof js_events)) > 0) {
+      while ((bytes = read(joy->fd, &input_events, sizeof input_events)) > 0) {
 
-         nr = bytes / sizeof(struct js_event);
+         nr = bytes / sizeof(struct input_event);
 
          for (i = 0; i < nr; i++) {
-
-            int type   = js_events[i].type;
-            int number = js_events[i].number;
-            int value  = js_events[i].value;
-
-            if (type & JS_EVENT_BUTTON) {
-               if (number < _AL_MAX_JOYSTICK_BUTTONS) {
-                  if (value)
+            int type   = input_events[i].type;
+            int code   = input_events[i].code;
+            int value  = input_events[i].value;
+            if (type == EV_KEY) {
+              int number = code - BTN_JOYSTICK;
+              if (number < _AL_MAX_JOYSTICK_BUTTONS) {              
+              if (value)
                      joy->joystate.button[number] = 32767;
                   else
                      joy->joystate.button[number] = 0;
 
-                  ljoy_generate_button_event(joy, number,
+              ljoy_generate_button_event(joy, number,
                                              (value
                                               ? ALLEGRO_EVENT_JOYSTICK_BUTTON_DOWN
                                               : ALLEGRO_EVENT_JOYSTICK_BUTTON_UP));
-               }
+              } 
+            } else if ((type == EV_ABS ) && (code < ABS_MISC)) {
+                int       stick = -1;
+                int       axis  = -1;
+                float     range, pos;
+                
+              
+                AXIS_MAPPING * map = joy->axis_mapping +code;
+                axis  = map->axis;
+                stick = map->stick;                
+                range = (float) map->max - (float) map->min;
+                /* Normalize around 0. */
+                pos   = (float) value    - (float) map->min;
+                /* Divide by range, to get value between 0.0 and 1.0  */
+                pos   = pos              / range;
+                /* Now multiply by 2.0 and substract 1.0 to get a value between 
+                * -1.0 and 1.0
+                */
+                pos   = pos * 2.0f - 1.0f;
+                joy->joystate.stick[stick].axis[axis] = pos;
+                ljoy_generate_axis_event(joy, stick, axis, pos);           
             }
-            else if (type & JS_EVENT_AXIS) {
-               if (number < TOTAL_JOYSTICK_AXES) {
-                  int stick = joy->axis_mapping[number].stick;
-                  int axis  = joy->axis_mapping[number].axis;
-                  float pos = value / 32767.0;
-
-                  joy->joystate.stick[stick].axis[axis] = pos;
-
-                  ljoy_generate_axis_event(joy, stick, axis, pos);
-               }
-            }
-         }
+         }   
       }
    }
    _al_event_source_unlock(es);
