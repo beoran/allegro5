@@ -59,6 +59,7 @@
 #include "allegro5/touch_input.h"
 #include "allegro5/transformations.h"
 #include "allegro5/utf8.h"
+#include "allegro5/haptic.h"
 
 
 #ifndef ALLEGRO_NO_COMPATIBILITY

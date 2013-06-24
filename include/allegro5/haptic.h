@@ -28,7 +28,8 @@
 
 /* Enum: ALLEGRO_HAPTIC_CONSTANTS
  */
-enum ALLEGRO_HAPTIC_CONSTANTS { 
+enum ALLEGRO_HAPTIC_CONSTANTS 
+{ 
   ALLEGRO_HAPTIC_RUMBLE       = 1 << 0,
   ALLEGRO_HAPTIC_PERIODIC     = 1 << 1,
   ALLEGRO_HAPTIC_CONSTANT     = 1 << 2,
@@ -46,7 +47,7 @@ enum ALLEGRO_HAPTIC_CONSTANTS {
   ALLEGRO_HAPTIC_GAIN         = 1 << 14,   
   ALLEGRO_HAPTIC_ANGLE        = 1 << 15,
   ALLEGRO_HAPTIC_RADIUS       = 1 << 16,
-  ALLEGRO_HAPRIC_AZIMUTH      = 1 << 17,
+  ALLEGRO_HAPTIC_AZIMUTH      = 1 << 17,
 };
 
 
@@ -62,13 +63,14 @@ typedef struct ALLEGRO_HAPTIC ALLEGRO_HAPTIC;
  * Radius (if supported ) is the distance of the effect from the user 
  * as a value between 0 and 1. Normally it is 0. Radius is only supported if the 
  * device capabilities include ALLEGRO_HAPTIC_RADIUS .  
- * Azimuth is the angle of elevation, between -M_PI and M_PI. 0 points to the 
- * horizontal plane, -M_PI points down, and M_PI points up.
+ * Azimuth is the angle of elevation, between -M_PI/2 and M_PI/2. 0 points to the 
+ * horizontal plane, -M_PI/2 points down, and M_PI/2 points up.
  * Azimuth is only supported if the device capabilities include 
  * ALLEGRO_HAPTIC_AZIMUTH.
  * 
  */
-struct ALLEGRO_HAPTIC_DIRECTION {
+struct ALLEGRO_HAPTIC_DIRECTION 
+{
   double angle; 
   double radius;
   double azimuth;
@@ -79,13 +81,15 @@ struct ALLEGRO_HAPTIC_DIRECTION {
  * and 1.0 that mean no effect and full 100% effect. */
 
 /* Delay to start the replay and duration of the replay, expressed  in seconds. */
-struct ALLEGRO_HAPTIC_REPLAY {
+struct ALLEGRO_HAPTIC_REPLAY 
+{
     double length;
     double delay;
 };
 
 /* Envelope of the effect. */
-struct ALLEGRO_HAPTIC_ENVELOPE {
+struct ALLEGRO_HAPTIC_ENVELOPE 
+{
     double attack_length;
     double attack_level;
     double fade_length;
@@ -93,20 +97,23 @@ struct ALLEGRO_HAPTIC_ENVELOPE {
 };
 
 /* Constant effect.  Level is between 0.0 and 1.0. */
-struct ALLEGRO_HAPTIC_CONSTANT_EFFECT {
+struct ALLEGRO_HAPTIC_CONSTANT_EFFECT 
+{
     double level;
     struct ALLEGRO_HAPTIC_ENVELOPE envelope;
 };
 
 /* Ramp effect. Both start_level and end level are between 0.0 and 1.0.  */
-struct ALLEGRO_HAPTIC_RAMP_EFFECT {
+struct ALLEGRO_HAPTIC_RAMP_EFFECT 
+{
     double start_level;
     double end_level;
     struct ALLEGRO_HAPTIC_ENVELOPE envelope;
 };
 
 /* Condition effect. */
-struct ALLEGRO_HAPTIC_CONDITION_EFFECT {
+struct ALLEGRO_HAPTIC_CONDITION_EFFECT 
+{
     double right_saturation;
     double left_saturation;
     double right_coeff;
@@ -116,7 +123,8 @@ struct ALLEGRO_HAPTIC_CONDITION_EFFECT {
 };
 
 /* Periodic (wave) effect. */
-struct ALLEGRO_HAPTIC_PERIODIC_EFFECT {
+struct ALLEGRO_HAPTIC_PERIODIC_EFFECT 
+{
     int waveform;
     double period;
     double magnitude;
@@ -130,12 +138,14 @@ struct ALLEGRO_HAPTIC_PERIODIC_EFFECT {
 
 /* Simple rumble effect with a magnitude between 0.0 and 1.0 for both 
  the strong and the weak rumble motors in the haptic device.  */
-struct ALLEGRO_HAPTIC_RUMBLE_EFFECT {
+struct ALLEGRO_HAPTIC_RUMBLE_EFFECT 
+{
     double strong_magnitude;
     double weak_magnitude;
 };
 
-union ALLEGRO_HAPTIC_EFFECT_UNION {
+union ALLEGRO_HAPTIC_EFFECT_UNION 
+{
     struct ALLEGRO_HAPTIC_CONSTANT_EFFECT   constant;
     struct ALLEGRO_HAPTIC_RAMP_EFFECT       ramp;
     struct ALLEGRO_HAPTIC_PERIODIC_EFFECT   periodic;
@@ -143,29 +153,26 @@ union ALLEGRO_HAPTIC_EFFECT_UNION {
     struct ALLEGRO_HAPTIC_RUMBLE_EFFECT     rumble;
 };
 
-/* Type: ALLEGRO_HAPTIC_EFFECT. This neeeds to be filled in and uploaded to
- * the haptic device before it can be played back. 
- */
-struct ALLEGRO_HAPTIC_EFFECT {
-        int                                type;
-        int                                id;
-        struct ALLEGRO_HAPTIC_DIRECTION    direction;
-        struct ALLEGRO_HAPTIC_REPLAY       replay;
-        union ALLEGRO_HAPTIC_EFFECT_UNION  data; 
-};
-
-
 /* Type: ALLEGRO_HAPTIC_EFFECT
  */
-typedef struct ALLEGRO_HAPTIC_EFFECT ALLEGRO_HAPTIC_EFFECT;
+struct ALLEGRO_HAPTIC_EFFECT 
+{
+  
+    int                                type;
+    struct ALLEGRO_HAPTIC_DIRECTION    direction;
+    struct ALLEGRO_HAPTIC_REPLAY       replay;
+    union ALLEGRO_HAPTIC_EFFECT_UNION  data; 
+};
 
+typedef struct ALLEGRO_HAPTIC_EFFECT ALLEGRO_HAPTIC_EFFECT;
 
 
 /* Type: ALLEGRO_HAPTIC_EFFECT_ID
  */
 typedef struct ALLEGRO_HAPTIC_EFFECT_ID ALLEGRO_HAPTIC_EFFECT_ID;
 
-struct ALLEGRO_HAPTIC_EFFECT_ID {
+struct ALLEGRO_HAPTIC_EFFECT_ID 
+{
   ALLEGRO_HAPTIC        * _haptic;
   ALLEGRO_HAPTIC_EFFECT * _effect;
   int                     _id;
@@ -211,6 +218,10 @@ AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_display  , (ALLEGRO_DISPLAY *));
  * device handle. Otherwise returns NULL. */
 AL_FUNC(ALLEGRO_HAPTIC *, al_get_haptic_from_touch_input, (ALLEGRO_TOUCH_INPUT *));
 
+/* Releases the haptic device when it's not needed anymore. Should also be used in 
+ * case the joystick configuration changed, such as when a joystick is hot plugged.  
+ */
+AL_FUNC(bool, al_release_haptic, (ALLEGRO_HAPTIC *));
 
 
 
@@ -247,8 +258,6 @@ AL_FUNC(bool,   al_upload_and_play_haptic_effect , (ALLEGRO_HAPTIC *, ALLEGRO_HA
 
 /* Stops playing a haptic effect . */
 AL_FUNC(bool,   al_stop_haptic_effect      , (ALLEGRO_HAPTIC_EFFECT_ID *));
-/* Stops playing all haptic effects on this device. */
-AL_FUNC(bool,   al_stop_all_haptic_effects , (ALLEGRO_HAPTIC *));
 
 /* Returns true if the haptic effect is playing or false if not or if stopped. */
 AL_FUNC(bool,   al_is_haptic_effect_playing, (ALLEGRO_HAPTIC_EFFECT_ID *));
@@ -256,8 +265,6 @@ AL_FUNC(bool,   al_is_haptic_effect_playing, (ALLEGRO_HAPTIC_EFFECT_ID *));
 /* Releases the haptic effect from the device it has been uploaded to, allowing for 
  other effects to be uploaded. */
 AL_FUNC(bool,   al_release_haptic_effect, (ALLEGRO_HAPTIC_EFFECT_ID *));
-
-
 
 /* Uploads a simple rumble effect to the haptic device and starts playback immediately.
  */

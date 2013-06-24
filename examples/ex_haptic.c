@@ -1,11 +1,10 @@
 /*
- *    Example program for the Allegro library, by Peter Wang.
+ *    Example program for the Allegro library, by Beoran.
  *
- *    This program tests joystick events.
+ *    This program tests haptic effects.examples/ex_hapti
  */
 
 #include <allegro5/allegro.h>
-#include <allegro5/haptic.h>
 #include <allegro5/allegro_primitives.h>
 
 #include "common.c"
@@ -26,16 +25,14 @@ int main(void)
    ALLEGRO_HAPTIC_EFFECT effect = {0};
    double intensity = 1.0;
    double duration  = 1.0;
+   int num_joysticks;
+
    effect.type                           = ALLEGRO_HAPTIC_RUMBLE;
    effect.data.rumble.strong_magnitude   = intensity;
    effect.data.rumble.weak_magnitude     = intensity;  
    effect.replay.delay                   = 0.1;
-   effect.replay.length                  = duration;
+   effect.replay.length                  = duration;   
    
-   
-   int num_joysticks;
-   double gain = -1.0;
-
    if (!al_init()) {
       abort_example("Could not init Allegro.\n");
    }
@@ -66,27 +63,28 @@ int main(void)
        log_printf("Joystick %s supports force feedback.\n", al_get_joystick_name(joy));
        haptic = al_get_haptic_from_joystick(joy);
        log_printf("Can play back %d haptic effects.\n", al_get_num_haptic_effects(haptic));
-       log_printf("Set gain: %d.\n", al_set_haptic_gain(haptic, 0.8));
+       log_printf("Set gain to 0.8: %d.\n", al_set_haptic_gain(haptic, 0.8));
        log_printf("Get gain: %lf.\n", al_get_haptic_gain(haptic));
        log_printf("Capabilities: %d.\n", al_get_haptic_capabilities(haptic));
-       log_printf("Upload: %d.\n: ", al_upload_haptic_effect(haptic, &effect, &id));
-       log_printf("Play: %d.\n: ", al_play_haptic_effect(&id, 5));
-       // al_rest(1.1 * 5 + 0.5);
+       log_printf("Upload effect: %d.\n ", al_upload_haptic_effect(haptic, &effect, &id));
+       log_printf("Playing effect: %d.\n ", al_play_haptic_effect(&id, 5));
        while (al_is_haptic_effect_playing(&id)) {
-         //log_printf(".");
        }
-       log_printf("Set gain: %d.\n", al_set_haptic_gain(haptic, 0.4));
-       log_printf("Play: %d.\n: ", al_play_haptic_effect(&id, 5));
-       while (al_is_haptic_effect_playing(&id)) {
-         //log_printf(".");
-       }
-       log_printf("Release: %d.\n: ", al_release_haptic_effect(&id));
+       log_printf("Set gain to 0.4: %d.\n", al_set_haptic_gain(haptic, 0.4));
+       log_printf("Get gain: %lf.\n", al_get_haptic_gain(haptic));
+       log_printf("Playing effect again: %d.\n ", al_play_haptic_effect(&id, 5));
+       al_rest(2.0);
+       log_printf("Stopping effect: %d.\n ", al_stop_haptic_effect(&id));
        
-       log_printf("\nAll done!\n");       
+       while (al_is_haptic_effect_playing(&id)) {
+         //log_printf(".");
+       }
+       log_printf("Release effect: %d.\n ", al_release_haptic_effect(&id));
+       log_printf("Release haptic: %d.\n ", al_release_haptic(haptic));
      }
    }
-   
-   
+          
+   log_printf("\nAll done!\n");       
    close_log(true);
    // al_register_event_source(event_queue, al_get_display_event_source(display));
    // al_register_event_source(event_queue, al_get_haptic_event_source());

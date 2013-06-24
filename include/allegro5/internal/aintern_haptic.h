@@ -43,8 +43,8 @@ typedef struct ALLEGRO_HAPTIC_DRIVER
    AL_METHOD(bool, play_effect       , (ALLEGRO_HAPTIC_EFFECT_ID *, int));
    AL_METHOD(bool, stop_effect       , (ALLEGRO_HAPTIC_EFFECT_ID *));   
    AL_METHOD(bool, is_effect_playing , (ALLEGRO_HAPTIC_EFFECT_ID *));   
-   AL_METHOD(bool, stop_all_efects   , (ALLEGRO_HAPTIC *));
    AL_METHOD(bool, release_effect    , (ALLEGRO_HAPTIC_EFFECT_ID *));
+   AL_METHOD(bool, release           , (ALLEGRO_HAPTIC *));
    
 } ALLEGRO_HAPTIC_DRIVER;
 

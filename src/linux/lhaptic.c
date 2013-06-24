@@ -102,6 +102,8 @@ static ALLEGRO_HAPTIC * lhap_get_from_keyboard(ALLEGRO_KEYBOARD *dev);
 static ALLEGRO_HAPTIC * lhap_get_from_display(ALLEGRO_DISPLAY *dev);
 static ALLEGRO_HAPTIC * lhap_get_from_touch_input(ALLEGRO_TOUCH_INPUT *dev);
 
+static bool lhap_release(ALLEGRO_HAPTIC * haptic);
+
 static bool   lhap_get_active(ALLEGRO_HAPTIC * hap);
 static int    lhap_get_capabilities(ALLEGRO_HAPTIC * dev);   
 static double lhap_get_gain(ALLEGRO_HAPTIC * dev);
@@ -112,7 +114,6 @@ static bool lhap_is_effect_ok(ALLEGRO_HAPTIC *dev, ALLEGRO_HAPTIC_EFFECT *eff);
 static bool lhap_upload_effect(ALLEGRO_HAPTIC *dev, ALLEGRO_HAPTIC_EFFECT *eff, ALLEGRO_HAPTIC_EFFECT_ID * id);
 static bool lhap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID * id, int loop);
 static bool lhap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID * id);
-static bool lhap_stop_all_effects(ALLEGRO_HAPTIC *dev);
 static bool lhap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID * id);
 static bool lhap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID * id);
 
@@ -149,8 +150,9 @@ ALLEGRO_HAPTIC_DRIVER hapdrv_linux =
    lhap_play_effect,
    lhap_stop_effect,
    lhap_is_effect_playing,
-   lhap_stop_all_effects,
-   lhap_release_effect
+   lhap_release_effect,
+   
+   lhap_release
 };
 
 ALLEGRO_HAPTIC_DRIVER * _al_haptic_driver = &hapdrv_linux;
@@ -198,9 +200,6 @@ static ALLEGRO_HAPTIC_LINUX * lhap_from_al(ALLEGRO_HAPTIC * hap) {
   if (!ptr) return NULL;
   return (ALLEGRO_HAPTIC_LINUX *) (ptr - offsetof(ALLEGRO_HAPTIC_LINUX, parent));
 }
-
-
-
 
 static void lhap_exit_haptic() {
   al_destroy_mutex(haptic_mutex);
@@ -675,17 +674,15 @@ static bool lhap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID * id, int loops) {
   return true;  
 }
 
+
 static bool lhap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID * id) {
   struct input_event play;
   ALLEGRO_HAPTIC_LINUX * lhap = (ALLEGRO_HAPTIC_LINUX *) id->_haptic;    
-  int loops                   = 0;
-  
   if(!lhap) return false; 
   
-   
   play.type     = EV_FF;
   play.code     = id->_handle; 
-  loops         = (loops < 0 ) ? 1 : loops;
+  play.value    = 0;  
   
   if (write(lhap->fd, (const void*) &play, sizeof(play)) < 0) {
     return false;
@@ -694,20 +691,14 @@ static bool lhap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID * id) {
   return true;   
 }
 
-static bool lhap_stop_all_effects(ALLEGRO_HAPTIC * haptic) {  
-  ALLEGRO_HAPTIC_LINUX * lhap = (ALLEGRO_HAPTIC_LINUX *) haptic;    
-  
-  
-  return false;
-}
 
 static bool lhap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID * id) {  
   double duration;
   ASSERT(id); 
   
   if(!id->_playing) return false;
-  /* Since there is no Linux api to test this, use a timer to check if the 
-   effect has been playing longe enough to be finsihed or not. */
+  /* Since AFAICS there is no Linux API to test this, use a timer to check if the 
+   effect has been playing long enough to be finished or not. */
   duration = lhap_effect_duration(id->_effect) * id->_loops;
   if((id->_started + duration) >= al_get_time()) return true;  
   return false;
@@ -724,4 +715,16 @@ static bool lhap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID * id) {
   return true;
 }
 
+
+static bool lhap_release(ALLEGRO_HAPTIC * haptic) {
+  ALLEGRO_HAPTIC_LINUX * lhap = lhap_from_al(haptic);
+  
+  ASSERT(haptic);
+  
+  if(!lhap->in_use) return false;
+  
+  lhap->in_use = false;
+  lhap->fd     = -1;
+  return true;
+}
 

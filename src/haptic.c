@@ -86,8 +86,6 @@ bool al_is_haptic_installed(void)
 }
 
 
-
-
 /* Function: al_is_joystick_haptic
  */
 bool al_is_joystick_haptic(ALLEGRO_JOYSTICK * dev) 
@@ -262,14 +260,6 @@ bool al_stop_haptic_effect (ALLEGRO_HAPTIC_EFFECT_ID * id)
     return haptic_driver->stop_effect(id);
 }
 
-/* Function: al_stop_all_haptic_effects
- */
-bool al_stop_all_haptic_effects (ALLEGRO_HAPTIC * hap) 
-{
-  return haptic_driver->stop_all_efects(hap);
-}
-
-
 /* Function: al_is_haptic_effect_playing
  */
 bool al_is_haptic_effect_playing (ALLEGRO_HAPTIC_EFFECT_ID * id) 
@@ -291,8 +281,7 @@ bool al_rumble_haptic (ALLEGRO_HAPTIC * hap,  double intensity, double duration,
 }
 
 
-/*
- * Function: al_release_haptic_effect 
+/* Function: al_release_haptic_effect 
  */
 bool al_release_haptic_effect (ALLEGRO_HAPTIC_EFFECT_ID * id) 
 {
@@ -300,6 +289,12 @@ bool al_release_haptic_effect (ALLEGRO_HAPTIC_EFFECT_ID * id)
 }
 
 
+/* Function: al_release_haptic
+ */
+bool al_release_haptic(ALLEGRO_HAPTIC * haptic) 
+{
+  return haptic_driver->release(haptic);
+}
 
 
 
