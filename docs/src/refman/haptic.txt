@@ -327,7 +327,7 @@ The haptic effect must have been filled in completely and correctly.
 Uploads the haptic effect to the device. 
 The haptic effect must have been filled in completely and correctly.
 You must also pass in a pointer to a user allocated [ALLEGRO_HAPTIC_EFFECT_ID]. 
-It it is stored a reference to be used to control playback of the effect. 
+This `id` can be used to control playback of the effect. 
 Returns true if the effect was sucesfully uploaded, false if not.
 
 The same haptic effect can be uploaded several times, as long as care is taken to 
