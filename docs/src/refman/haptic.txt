@@ -41,7 +41,7 @@ should be caused when it is played.
 
 See also: [al_get_haptic_capabilities], [ALLEGRO_HAPTIC_EFFECT]
 
-## API: ALLEGRO_HAPTIC_EFFECT.
+## API: ALLEGRO_HAPTIC_EFFECT
 
 This struct models a particular haptic or vibration effect. It needs to be filled 
 correctly in and uploaded to a haptic device, before the device can play it back. 
@@ -254,9 +254,9 @@ such as a phone or a tablet.
 
 Returns true if the joystick has haptic capabilities, false if not.
 
-## API: al_is_touch_input
+## API: al_is_touch_input_haptic
 
-Returns true if thetouch input device has haptic capabilities, false if not.
+Returns true if the touch input device has haptic capabilities, false if not.
 
 
 ## API: al_get_haptic_from_mouse
