@@ -96,11 +96,11 @@ static void draw_joystick_axes(ALLEGRO_JOYSTICK *joy, int cx, int cy, int stick)
       al_draw_filled_rectangle(zx-csize, cy-osize, zx+csize, cy+osize, grey);
       al_draw_rectangle(zx-csize+0.5f, cy-osize+0.5f, zx+csize-0.5f, cy+osize-0.5f, black, 0);
       al_draw_filled_rectangle(zx-5, z-5, zx+5, z+5, black);
-      al_draw_textf(font, black, cx , cy + osize,  ALLEGRO_ALIGN_CENTRE, "%s %s %s", joy_axes_name[stick][0], joy_axes_name[stick][1], joy_axes_name[stick][2]);
+      al_draw_textf(font, black, cx , cy + osize + 1,  ALLEGRO_ALIGN_CENTRE, "%s: %s %s %s", joy_sticks_name[stick], joy_axes_name[stick][0], joy_axes_name[stick][1], joy_axes_name[stick][2]);
    } else if (num_axes[stick] == 2) {
-      al_draw_textf(font, black, cx , cy + osize,  ALLEGRO_ALIGN_CENTRE, "%s %s", joy_axes_name[stick][0], joy_axes_name[stick][1]);
+      al_draw_textf(font, black, cx , cy + osize + 1,  ALLEGRO_ALIGN_CENTRE, "%s: %s %s", joy_sticks_name[stick], joy_axes_name[stick][0], joy_axes_name[stick][1]);
    } else if (num_axes[stick] == 1) {
-      al_draw_textf(font, black, cx , cy + osize,  ALLEGRO_ALIGN_CENTRE, "%s", joy_axes_name[stick][0]);
+      al_draw_textf(font, black, cx , cy + osize + 1,  ALLEGRO_ALIGN_CENTRE, "%s: %s", joy_sticks_name[stick], joy_axes_name[stick][0]);
    }
 
    if (joy) {
