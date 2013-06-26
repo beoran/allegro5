@@ -385,7 +385,8 @@ static void ljoy_scan(bool configure)
          int res, i;  
          int stick = 0;
          int axis  = 0;
-         
+         int num_sticks    = 0;
+         int num_throttles = 0;
    
          // get_num_axes(fd, &num_axes);
          get_num_buttons(fd, &num_buttons);
@@ -396,7 +397,7 @@ static void ljoy_scan(bool configure)
          /* Scan the axes to get their properties. */
         res = ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs_bits)), abs_bits);    
         if (res < 0) continue;
-        for (i = 0; i <= ABS_MISC; i++) {
+        for (i = ABS_X; i <= ABS_HAT3Y; i++) {
           if(TEST_BIT(i, abs_bits)) {
           struct input_absinfo absinfo;
           if (ioctl(fd, EVIOCGABS(i), &absinfo) < 0)
@@ -407,12 +408,12 @@ static void ljoy_scan(bool configure)
               || (i == ABS_PRESSURE) || (i == ABS_DISTANCE) || (i== ABS_TOOL_WIDTH) 
             ) { 
               /* One axis throttle. */
+               num_throttles++;
                joy->parent.info.stick[stick].flags = ALLEGRO_JOYFLAG_ANALOGUE;
                joy->parent.info.stick[stick].num_axes = 1;
-               joy->parent.info.stick[stick].axis[0].name = "Throttle";
-               char *name = joy->parent.info.stick[stick].axis[0].name;
-               joy->parent.info.stick[stick].name = al_malloc(strlen(name) + 1);
-               strcpy(joy->parent.info.stick[stick].name, name);
+               joy->parent.info.stick[stick].axis[0].name = "X";
+               joy->parent.info.stick[stick].name = al_malloc(32);
+               snprintf((char *)joy->parent.info.stick[stick].name, 32, "Throttle %d", num_throttles);
                joy->axis_mapping[i].stick = stick;
                joy->axis_mapping[i].axis  = 0;
                joy->axis_mapping[i].min   = absinfo.minimum;
@@ -423,8 +424,9 @@ static void ljoy_scan(bool configure)
               /* Consider all these types of axis as throttle axis. */
                stick++;
             } else { /* regular axis, two axis stick. */
-              int digital = ((i >= ABS_HAT0X) && (i <=  ABS_HAT3Y));
+               int digital = ((i >= ABS_HAT0X) && (i <=  ABS_HAT3Y));
                if (axis == 0) { /* first axis of new joystick */
+                num_sticks++;
                 if (digital) {
                   joy->parent.info.stick[stick].flags = ALLEGRO_JOYFLAG_DIGITAL;
                 } else { 
@@ -434,7 +436,7 @@ static void ljoy_scan(bool configure)
                 joy->parent.info.stick[stick].axis[0].name = "X";
                 joy->parent.info.stick[stick].axis[1].name = "Y";
                 joy->parent.info.stick[stick].name = al_malloc (32);
-                snprintf((char *)joy->parent.info.stick[stick].name, 32, "Stick %d", stick+1);
+                snprintf((char *)joy->parent.info.stick[stick].name, 32, "Stick %d", num_sticks);
                 joy->axis_mapping[i].stick = stick;
                 joy->axis_mapping[i].axis  = axis;
                 joy->axis_mapping[i].min   = absinfo.minimum;
