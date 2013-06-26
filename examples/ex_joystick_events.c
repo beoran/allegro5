@@ -7,8 +7,10 @@
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_primitives.h>
+#include <allegro5/allegro_font.h>
 
 #include "common.c"
+#include <allegro5/joystick.h>
 
 #define MAX_AXES     3
 #define MAX_STICKS   16
@@ -21,12 +23,18 @@ ALLEGRO_FONT         *font;
 ALLEGRO_COLOR        black;
 ALLEGRO_COLOR        grey;
 ALLEGRO_COLOR        white;
+ALLEGRO_FONT         * font;   
 
 int num_sticks = 0;
 int num_buttons = 0;
 int num_axes[MAX_STICKS] = { 0 };
 float joys[MAX_STICKS][MAX_AXES] = {{ 0 }};
 bool joys_buttons[MAX_BUTTONS] = { 0 };
+const char * joy_name          = NULL;
+
+const char * joy_sticks_name[MAX_STICKS]         = { 0 };
+const char * joy_axes_name[MAX_STICKS][MAX_AXES] = {{ 0 }};
+const char * joy_buttons_name[MAX_BUTTONS]       = { 0 };
 
 
 static void setup_joystick_values(ALLEGRO_JOYSTICK *joy)
@@ -46,9 +54,13 @@ static void setup_joystick_values(ALLEGRO_JOYSTICK *joy)
    if (num_sticks > MAX_STICKS)
       num_sticks = MAX_STICKS;
    for (i = 0; i < num_sticks; i++) {
-      num_axes[i] = al_get_joystick_num_axes(joy, i);
-      for (j = 0; j < num_axes[i]; ++j)
+      num_axes[i] = al_get_joystick_num_axes(joy, i);      
+      joy_sticks_name[i] = al_get_joystick_stick_name(joy, i);
+      
+      for (j = 0; j < num_axes[i]; ++j) {
          joys[i][j] = jst.stick[i].axis[j];
+         joy_axes_name[i][j] = al_get_joystick_axis_name(joy, i, j);
+      }
    }
 
    num_buttons = al_get_joystick_num_buttons(joy);
@@ -57,7 +69,11 @@ static void setup_joystick_values(ALLEGRO_JOYSTICK *joy)
    }
    for (i = 0; i < num_buttons; i++) {
       joys_buttons[i] = (jst.button[i] >= 16384);
+      joy_buttons_name[i] = al_get_joystick_button_name(joy, i);
    }
+   
+   joy_name = al_get_joystick_name(joy);
+   
 }
 
 
@@ -80,6 +96,11 @@ static void draw_joystick_axes(ALLEGRO_JOYSTICK *joy, int cx, int cy, int stick)
       al_draw_filled_rectangle(zx-csize, cy-osize, zx+csize, cy+osize, grey);
       al_draw_rectangle(zx-csize+0.5f, cy-osize+0.5f, zx+csize-0.5f, cy+osize-0.5f, black, 0);
       al_draw_filled_rectangle(zx-5, z-5, zx+5, z+5, black);
+      al_draw_textf(font, black, cx , cy + osize,  ALLEGRO_ALIGN_CENTRE, "%s %s %s", joy_axes_name[stick][0], joy_axes_name[stick][1], joy_axes_name[stick][2]);
+   } else if (num_axes[stick] == 2) {
+      al_draw_textf(font, black, cx , cy + osize,  ALLEGRO_ALIGN_CENTRE, "%s %s", joy_axes_name[stick][0], joy_axes_name[stick][1]);
+   } else if (num_axes[stick] == 1) {
+      al_draw_textf(font, black, cx , cy + osize,  ALLEGRO_ALIGN_CENTRE, "%s", joy_axes_name[stick][0]);
    }
 
    if (joy) {
@@ -142,6 +163,9 @@ static void draw_all(ALLEGRO_JOYSTICK *joy)
    int i;
 
    al_clear_to_color(al_map_rgb(0xff, 0xff, 0xc0));
+   
+   al_draw_textf(font, black, width / 2, height - 10,  ALLEGRO_ALIGN_CENTRE, "Joystick: %s", joy_name);
+   
 
    if (joy) {
       al_draw_textf(font, black, width / 2, height - 10, ALLEGRO_ALIGN_CENTRE,
@@ -240,7 +264,7 @@ int main(void)
    al_install_keyboard();
 
    black = al_map_rgb(0, 0, 0);
-   grey = al_map_rgb(0xe0, 0xe0, 0xe0);
+   grey  = al_map_rgb(0xe0, 0xe0, 0xe0);
    white = al_map_rgb(255, 255, 255);
    font = al_create_builtin_font();
 
@@ -260,6 +284,8 @@ int main(void)
    setup_joystick_values(al_get_joystick(0));
 
    main_loop();
+   
+   al_destroy_font(font);
 
    al_destroy_font(font);
 
