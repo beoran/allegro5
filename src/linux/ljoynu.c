@@ -107,32 +107,113 @@ static int timer_fd = -1;
 #define TEST_BIT(nr, addr) \
     (((1UL << ((nr) % (sizeof(long) * 8))) & ((addr)[(nr) / (sizeof(long) * 8)])) != 0)
 
+    
+    
+/* Gets the amount of joystick related keys/buttons. Only accept joystick-related 
+ * buttons, from BTN_MISC to BTN_9 for miscellaneous input, BTN_JOYSTICK to 
+ * BTN_DEAD, for joysticks, from BTN_GAMEPAD to BTN_THUMBR for game pads, 
+ * BTN_WHEEL, BTN_GEAR_DOWN, and BTN_GEAR_UP for steering wheels, and 
+ * BTN_TRIGGER_HAPPY_XXX buttons just in case some joysticks use these as well. 
+ */
+static bool get_num_buttons(int fd, int * num_buttons)
+{
+    unsigned long key_bits[NLONGS(KEY_CNT)]  = {0};
+    int nbut = 0;
+    
+    int res, i;
+ 
+    res = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits);
+    if (res < 0) return false;
+        
+    for (i = BTN_MISC; i <= BTN_GEAR_UP; i++) {
+      bool is_wheel, is_joystick, is_gamepad, is_misc, is_triggerhappy;
+      
+      if(TEST_BIT(i, key_bits)) {
+        /*The device has this button. Determine kind of button by checking the range. */
+        is_misc           = ((i >= BTN_MISC)     && (i <=  BTN_9));
+        is_joystick       = ((i >= BTN_JOYSTICK) && (i <= BTN_DEAD));
+        is_gamepad        = ((i >= BTN_GAMEPAD)  && (i <= BTN_THUMBR));
+        is_wheel          = ((i >= BTN_WHEEL)    && (i <= BTN_GEAR_UP));
+        is_triggerhappy   = ((i >= BTN_TRIGGER_HAPPY)  && (i <= BTN_TRIGGER_HAPPY40));
+        if (!(is_misc || is_joystick || is_gamepad || is_wheel || is_triggerhappy) ) {
+          /* Ignore any buttons that don't seem joystick related. */
+          continue;
+        }        
+        nbut++;
+      }
+    }
+    (*num_buttons) = nbut;
+    return true;
+}
+
+/* Check the amount of joystick-related absolute axes. 
+ * Note that some devices, like (wireless) keyboards, may actually have absolute
+ * axes, such as a volume axis for the volume up / volume down buttons. 
+ * Also, some devices like a PS3 controller report many unusual axis, probably 
+ * used in nonstandard ways by the PS3 console. All these type of axes are  
+ * ignored by this function and by this driver. 
+ */
+static bool get_num_axes(int fd, int * num_axes) 
+{
+    int res, i;
+    unsigned long abs_bits[NLONGS(ABS_CNT)]  = {0};
+    int axes = 0;
+  
+    /* Only accept the axes from ABS_X up unto ABS_HAT3Y as real joystick
+    * axes. The following axes, ABS_PRESSURE, ABS_DISTANCE, ABS_TILT_X, 
+    * ABS_TILT_Y, ABS_TOOL_WIDTH seem to be for use by a drawing tablet like a 
+    * Wacom. ABS_VOLUME is for volume sliders or key pairs on some keyboards. 
+    * Other axes up to ABS_MISC may exist, such as on the PS3, 
+    * but they are most likely not useful.
+    */ 
+    
+    /* Scan the axes to get their properties. */
+    res = ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(abs_bits)), abs_bits);    
+    if (res < 0) return false;
+    for (i = ABS_X; i <= ABS_HAT3Y; i++) 
+    {
+        if(TEST_BIT(i, abs_bits)) 
+        {
+           axes++;
+        }
+    }
+  /* Finally store the aount of axes. */
+  (*num_axes) = axes;
+  return true;
+}
+
+
+
+    
 /* check_is_event_joystick: 
  *
  *  Return true if this fd supports the /dev/inputt/eventxx API and 
  * is a joystick indeed.
  */
 static bool check_is_event_joystick(int fd) {
-
-  
-  // unsigned long device_bits[(EV_MAX + 8) / sizeof(unsigned long)];  
   unsigned long bitmask[NLONGS(EV_CNT)]   = {0};
   
   if (ioctl (fd, EVIOCGBIT(0, sizeof(bitmask)), bitmask) < 0) {
-    perror ("EVIOCGBIT ioctl failed");
-    fprintf(stderr, "For fd %d\n", fd);
     return false;
   }
-  /* If we see buttons and axes, it's most likely a joystick */
+  
+  /* If there are buttons and axes, it may be a joystick. Some of 
+   these axes may be not joystick-related though, so investigate further. */
    if (TEST_BIT(EV_ABS, bitmask) && TEST_BIT(EV_KEY, bitmask)) {   
-     return true;
+     int axes = 0, buttons = 0; 
+     /* Check the axes and buttons to see it it really is a joystick. */
+     if(!get_num_buttons(fd, &buttons)) return false;
+     if(!get_num_axes(fd, &axes)) return false;
+     /* The device must have at least 1 joystick related axis, and 1 joystick 
+      * related button. This is needed because some devices, such as mouse pads, 
+      * have ABS_X and ABS_Y axes just like a joystick would, but they don't have 
+      * joystick related buttons. By checking if the device has both joystick
+      *related axes and butons, such mouse pads can be excluded. 
+      */
+     return ((axes > 0) && (buttons > 0));
    }
    
-   /* Force feedback device is always a joystick. */
-   if (TEST_BIT(EV_FF, bitmask)) {
-     return true;
-   }
-   
+   /* No axes, no buttons, no joystick, sorry. */
    return false;
 }
 
@@ -237,27 +318,6 @@ static void inactivate_joy(ALLEGRO_JOYSTICK_LINUX *joy)
 }
 
 
-static bool get_num_buttons(int fd, int * num_buttons)
-{
-    unsigned long key_bits[NLONGS(KEY_CNT)]  = {0};
-    int nbut = 0;
-    
-    int res, i;
- 
-    res = ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits);
-    if (res < 0) return false;
-    
-    for (i = BTN_MISC ; i <= KEY_MAX; i++) {
-      if(TEST_BIT(i, key_bits)) {
-          nbut++;
-      }
-    }
-    (*num_buttons) = nbut;
-    return true;
-}
-
-
-
 static void ljoy_scan(bool configure)
 {
    int fd;
@@ -315,7 +375,7 @@ static void ljoy_scan(bool configure)
 
       if (ioctl(fd, EVIOCGNAME(sizeof(joy->name)), joy->name) < 0)
          strcpy(joy->name, "Unknown");
-
+      
       /* Fill in the joystick information fields. */
       {
          int num_axes = 0;
