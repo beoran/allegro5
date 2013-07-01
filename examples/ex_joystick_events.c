@@ -287,8 +287,6 @@ int main(void)
    
    al_destroy_font(font);
 
-   al_destroy_font(font);
-
    return 0;
 }
 
