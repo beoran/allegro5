@@ -222,7 +222,7 @@ This struct is used as a handle to control playback of a haptic effect.
 The struct should be considered opaque. It's implementation is visible merely to 
 allow allocation by the users of the Allegro library. 
 
-## API: al_install_haptic 
+## API: al_install_haptic
 
 Installs the haptic (force feedback) device subsystem. This must be called before 
 using any other haptic related functions. Returns true if the haptics subsystem
@@ -287,7 +287,7 @@ Should also be used in case the joystick configuration changed, such as when a
 joystick is hot plugged. 
 
 
-## API:  al_get_haptic_active 
+## API:  al_get_haptic_active
 
 Returns true if the haptic device can currently be used, false if not.
 
@@ -296,7 +296,7 @@ Returns true if the haptic device can currently be used, false if not.
 Returns an integer with or'ed values from [ALLEGRO_HAPTIC_CONSTANTS], 
 which, if set, indicate that the haptic device supports the given feature. 
 
-## API: al_set_haptic_gain 
+## API: al_set_haptic_gain
 
 Sets the gain of the haptic device if supported. Gain is much like volume for sound, 
 it is as if every effect's intensity is multiplied by it. Gain is a value between 
@@ -305,7 +305,7 @@ it is as if every effect's intensity is multiplied by it. Gain is a value betwee
 If not, this function returns false, and all effects will be played without any gain 
 influence.
 
-## API: al_get_haptic_gain 
+## API: al_get_haptic_gain
 Returns the current gain of the device. Gain is much like volume for sound, 
 it is as if every effect's intensity is multiplied by it. Gain is a value between 
 0.0 and 1.0. Only works correctly if [al_get_haptic_capabilities] returns a value 
@@ -322,7 +322,7 @@ This depends on the platform and the device.
 Returns true if the haptic device can play the haptic effect as given, false if not.
 The haptic effect must have been filled in completely and correctly.
 
-## API: al_upload_haptic_effect 
+## API: al_upload_haptic_effect
 
 Uploads the haptic effect to the device. 
 The haptic effect must have been filled in completely and correctly.
@@ -333,7 +333,7 @@ Returns true if the effect was sucesfully uploaded, false if not.
 The same haptic effect can be uploaded several times, as long as care is taken to 
 pass in a different [ALLEGRO_HAPTIC_EFFECT_ID].
 
-## API: al_play_haptic_effect 
+## API: al_play_haptic_effect
 
 Plays back a previously uploaded haptic effect. The play_id must be a valid
 [ALLEGRO_HAPTIC_EFFECT_ID] obtained from [al_upload_haptic_effect], 
