@@ -211,61 +211,78 @@ Prog::Prog(const Theme & theme, ALLEGRO_DISPLAY *display) :
    d.add(waveform_label, 13, 1, 7, 1); 
    d.add(waveform_list , 13, 2, 7, 8);
    
-   d.add(replay_label , 0, 10 , 7, 1);
-   d.add(length_label , 0, 11 , 2, 1);
-   d.add(length_slider, 2, 11 , 5, 1);
-   d.add(delay_label  , 0, 12 , 2, 1);
-   d.add(delay_slider , 2, 12 , 5, 1);
-   d.add(loops_label  , 0, 13 , 7, 1);
-   d.add(loops_slider , 2, 14 , 5, 1);
-   d.add(gain_label   , 0, 15 , 7, 1);
-   d.add(gain_slider  , 2, 16 , 5, 1);
+   d.add(replay_label , 0, 11 , 7, 1);
+   d.add(length_label , 0, 12 , 2, 1);
+   d.add(length_slider, 2, 12 , 5, 1);
+   d.add(delay_label  , 0, 13 , 2, 1);
+   d.add(delay_slider , 2, 13 , 5, 1);
    
-   d.add(envelope_label         , 7 , 10, 6, 1);
-   d.add(attack_length_label    , 7 , 11, 3, 1);
-   d.add(attack_length_slider   , 10, 11, 3, 1);
-   d.add(attack_level_label     , 7 , 12, 3, 1);
-   d.add(attack_level_slider    , 10, 12, 3, 1);
-   d.add(fade_length_label      , 7 , 13, 3, 1);
-   d.add(fade_length_slider     , 10, 13, 3, 1);
-   d.add(fade_level_label       , 7 , 14, 3, 1);
-   d.add(fade_level_slider      , 10, 14, 3, 1);
+   d.add(loops_label            ,  7, 11, 7, 1);
+   d.add(loops_slider           ,  7, 12, 6, 1);
+   d.add(gain_label             , 13, 11, 7, 1);
+   d.add(gain_slider            , 13, 12, 7, 1);
+ 
    
-   d.add(coordinates_label      , 13, 10, 7, 1);
-   d.add(angle_label            , 13, 11, 2, 1);
-   d.add(angle_slider           , 15, 11, 5, 1);
-   d.add(radius_label           , 13, 12, 2, 1);
-   d.add(radius_slider          , 15, 12, 5, 1);
-   d.add(azimuth_label          , 13, 13, 2, 1);
-   d.add(azimuth_slider         , 15, 13, 5, 1);
+   d.add(envelope_label         , 0, 15, 9, 1);
+   d.add(attack_length_label    , 0, 16, 3, 1);
+   d.add(attack_length_slider   , 4, 16, 6, 1);
+   d.add(attack_level_label     , 0, 17, 3, 1);
+   d.add(attack_level_slider    , 4, 17, 6, 1);
+   d.add(fade_length_label      , 0, 18, 3, 1);
+   d.add(fade_length_slider     , 4, 18, 6, 1);
+   d.add(fade_level_label       , 0, 19, 3, 1);
+   d.add(fade_level_slider      , 4, 19, 6, 1);
+   
+   d.add(coordinates_label      , 11, 15, 9, 1);
+   d.add(angle_label            , 11, 16, 2, 1);
+   d.add(angle_slider           , 13, 16, 7, 1);
+   d.add(radius_label           , 11, 17, 2, 1);
+   d.add(radius_slider          , 13, 17, 7, 1);
+   d.add(azimuth_label          , 11, 18, 2, 1);
+   d.add(azimuth_slider         , 13, 18, 7, 1);
   
-   d.add(condition_effect_label ,  0, 18, 7, 1); 
-   d.add(right_coeff_label      ,  0, 19, 4, 1);
-   d.add(right_coeff_slider     ,  4, 19, 3, 1);
-   d.add(right_saturation_label ,  0, 20, 4, 1);
-   d.add(right_saturation_slider,  4, 20, 3, 1);  
-   d.add(left_coeff_label       ,  0, 21, 4, 1);
-   d.add(left_coeff_slider      ,  4, 21, 3, 1);
-   d.add(left_saturation_label  ,  0, 22, 4, 1);
-   d.add(left_saturation_slider ,  4, 22, 3, 1);
-   d.add(deadband_label         ,  0, 23, 4, 1);
-   d.add(deadband_slider        ,  4, 23, 3, 1);
-   d.add(center_label           ,  0, 24, 4, 1);
-   d.add(center_slider          ,  4, 24, 3, 1);
    
-   d.add(constant_effect_label  ,  7, 18, 6, 1);
-   d.add(level_label            ,  7, 19, 3, 1);
-   d.add(level_slider           , 10, 19, 3, 1);
+   d.add(condition_effect_label ,  0, 21, 9, 1); 
+   d.add(right_coeff_label      ,  0, 22, 4, 1);
+   d.add(right_coeff_slider     ,  4, 22, 6, 1);
+   d.add(right_saturation_label ,  0, 23, 4, 1);
+   d.add(right_saturation_slider,  4, 23, 6, 1);  
+   d.add(left_coeff_label       ,  0, 24, 4, 1);
+   d.add(left_coeff_slider      ,  4, 24, 6, 1);
+   d.add(left_saturation_label  ,  0, 25, 4, 1);
+   d.add(left_saturation_slider ,  4, 25, 6, 1);
+   d.add(deadband_label         ,  0, 26, 4, 1);
+   d.add(deadband_slider        ,  4, 26, 6, 1);
+   d.add(center_label           ,  0, 27, 4, 1);
+   d.add(center_slider          ,  4, 27, 6, 1);
    
-   d.add(periodic_effect_label  , 13, 18, 7, 1);
-   d.add(period_label           , 13, 19, 7, 1);
-   d.add(period_slider          , 15, 19, 5, 1);
-   d.add(magnitude_label        , 13, 20, 2, 1);
-   d.add(magnitude_slider       , 15, 20, 5, 1);
-   d.add(offset_label           , 13, 21, 2, 1);
-   d.add(offset_slider          , 15, 21, 5, 1);
-   d.add(phase_label            , 13, 22, 2, 1);
-   d.add(phase_slider           , 15, 22, 5, 1);
+
+   
+   d.add(periodic_effect_label  , 11, 21, 9, 1);
+   d.add(period_label           , 11, 22, 2, 1);
+   d.add(period_slider          , 13, 22, 7, 1);
+   d.add(magnitude_label        , 11, 23, 2, 1);
+   d.add(magnitude_slider       , 13, 23, 7, 1);
+   d.add(offset_label           , 11, 24, 2, 1);
+   d.add(offset_slider          , 13, 24, 7, 1);
+   d.add(phase_label            , 11, 25, 2, 1);
+   d.add(phase_slider           , 13, 25, 7, 1);
+   
+   d.add(ramp_effect_label      , 11, 29, 9, 1); 
+   d.add(start_level_label      , 11, 30, 2, 1);
+   d.add(start_level_slider     , 13, 30, 7, 1);
+   d.add(end_level_label        , 11, 31, 2, 1);
+   d.add(end_level_slider       , 13, 31, 7, 1);  
+   
+   d.add(rumble_effect_label    ,  0, 29, 9, 1);
+   d.add(strong_magnitude_label ,  0, 30, 4, 1);
+   d.add(strong_magnitude_slider,  4, 30, 6, 1);
+   d.add(weak_magnitude_label   ,  0, 31, 4, 1);
+   d.add(weak_magnitude_slider  ,  4, 31, 6, 1);
+   
+   d.add(constant_effect_label  ,  0, 33, 9, 1);
+   d.add(level_label            ,  0, 34, 3, 1);
+   d.add(level_slider           ,  4, 34, 6, 1);
    
   
    d.add(play_button  , 6, 38, 3, 1); 
