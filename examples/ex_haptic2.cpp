@@ -64,6 +64,30 @@ CapacityName capname[] = {
 #define EX_HAPTIC2_END_COORDS   18
 
 
+class PlayButton : public Button {
+public:
+   PlayButton() : Button("Play") {}
+   void on_click(int mx, int my);
+};
+
+
+void PlayButton::on_click(int, int)
+{
+   log_printf("Start playing...\n");
+}
+
+class StopButton : public Button {
+public:
+   StopButton() : Button("Stop") {}
+   void on_click(int mx, int my);
+};
+
+
+void StopButton::on_click(int, int)
+{
+   log_printf("Stop playing...\n");
+}
+
 
 
 class Prog {
@@ -113,8 +137,8 @@ private:
    HSlider gain_slider;
    Label gain_label;
    
-   Button play_button;
-   Button stop_button;
+   PlayButton play_button;
+   StopButton stop_button;
    
    
 public:
@@ -188,9 +212,7 @@ Prog::Prog(const Theme & theme, ALLEGRO_DISPLAY *display) :
    strong_magnitude_label("strong magnitude", false), 
    weak_magnitude_label("weak magnitude", false),
    gain_slider(10, 10),
-   gain_label("gain"),
-   play_button("Play"),
-   stop_button("Stop") 
+   gain_label("gain")
 {
   for (int i = 0; i < num_haptics; i++) {
     device_list.append_item(haptic_name[i]);
