@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <allegro5/color.h>
 #include "allegro5/allegro.h"
 #include "allegro5/allegro_font.h"
 #include <allegro5/allegro_primitives.h>
@@ -75,7 +76,8 @@ Widget::Widget():
    x1(0),
    y1(0),
    x2(0),
-   y2(0)
+   y2(0),
+   disabled(false)
 {
 }
 
@@ -371,14 +373,16 @@ void Label::draw()
 {
    const Theme & theme = this->dialog->get_theme();
    SaveState state;
+   ALLEGRO_COLOR fg = theme.fg;
+   if(is_disabled()) { fg = al_map_rgb(64, 64, 64); } 
 
    al_set_blender(ALLEGRO_ADD, ALLEGRO_ONE, ALLEGRO_INVERSE_ALPHA);
    if (centred) {
-      al_draw_text(theme.font, theme.fg, (this->x1 + this->x2 + 1)/2,
+      al_draw_text(theme.font, fg, (this->x1 + this->x2 + 1)/2,
          this->y1, ALLEGRO_ALIGN_CENTRE, this->text.c_str());
    }
    else {
-      al_draw_text(theme.font, theme.fg, this->x1, this->y1, 0, this->text.c_str());
+      al_draw_text(theme.font, fg, this->x1, this->y1, 0, this->text.c_str());
    }
 }
 
@@ -402,6 +406,7 @@ Button::Button(std::string text):
 
 void Button::on_mouse_button_down(int mx, int my)
 {
+   if (is_disabled()) return;
    (void)mx;
    (void)my;
    this->pushed = true;
@@ -410,6 +415,7 @@ void Button::on_mouse_button_down(int mx, int my)
 
 void Button::on_mouse_button_up(int mx, int my)
 {
+   if (is_disabled()) return;
    (void)mx;
    (void)my;
    this->pushed = false;
@@ -422,6 +428,7 @@ void Button::draw()
    ALLEGRO_COLOR fg;
    ALLEGRO_COLOR bg;
    SaveState state;
+   double y;
 
    if (this->pushed) {
       fg = theme.bg;
@@ -431,14 +438,21 @@ void Button::draw()
       fg = theme.fg;
       bg = theme.bg;
    }
+   
+   if(is_disabled()) { bg = al_map_rgb(64, 64, 64); } 
+
 
    al_draw_filled_rectangle(this->x1, this->y1,
       this->x2, this->y2, bg);
    al_draw_rectangle(this->x1 + 0.5, this->y1 + 0.5,
       this->x2 - 0.5, this->y2 - 0.5, fg, 0);
    al_set_blender(ALLEGRO_ADD, ALLEGRO_ONE, ALLEGRO_INVERSE_ALPHA);
+   /* Center the text vertically in the button, taking the font size 
+      into consideration. */
+   y = (this->y1 + this->y2 - al_get_font_line_height(theme.font) - 1) / 2;
+   
    al_draw_text(theme.font, fg, (this->x1 + this->x2 + 1)/2,
-      this->y1, ALLEGRO_ALIGN_CENTRE, this->text.c_str());
+      y, ALLEGRO_ALIGN_CENTRE, this->text.c_str());
 }
 
 bool Button::get_pushed()
@@ -455,6 +469,8 @@ ToggleButton::ToggleButton(std::string text) :
 
 void ToggleButton::on_mouse_button_down(int mx, int my)
 {
+   if (is_disabled()) return; 
+   
    (void)mx;
    (void)my;
    set_pushed(!this->pushed);
@@ -462,6 +478,8 @@ void ToggleButton::on_mouse_button_down(int mx, int my)
 
 void ToggleButton::on_mouse_button_up(int mx, int my)
 {
+   if (is_disabled()) return; 
+   
    (void)mx;
    (void)my;
 }
@@ -486,12 +504,14 @@ List::List(int initial_selection) :
 
 bool List::want_key_focus()
 {
-   return true;
+   return   !is_disabled();
 }
 
 void List::on_key_down(const ALLEGRO_KEYBOARD_EVENT & event)
 {
-   switch (event.keycode) {
+  if (is_disabled()) return;
+  
+  switch (event.keycode) {
       case ALLEGRO_KEY_DOWN:
          if (selected_item < items.size() - 1) {
             selected_item++;
@@ -510,6 +530,8 @@ void List::on_key_down(const ALLEGRO_KEYBOARD_EVENT & event)
 
 void List::on_click(int mx, int my)
 {
+   if (is_disabled()) return;
+  
    const Theme & theme = dialog->get_theme();
    unsigned int i = (my - this->y1) / al_get_font_line_height(theme.font);
    if (i < this->items.size()) {
@@ -525,8 +547,10 @@ void List::draw()
 {
    const Theme & theme = dialog->get_theme();
    SaveState state;
+   ALLEGRO_COLOR bg = theme.bg;
+   if(is_disabled()) { bg = al_map_rgb(64, 64, 64); } 
 
-   al_draw_filled_rectangle(x1 + 1, y1 + 1, x2 - 1, y2 - 1, theme.bg);
+   al_draw_filled_rectangle(x1 + 1, y1 + 1, x2 - 1, y2 - 1, bg);
 
    al_set_blender(ALLEGRO_ADD, ALLEGRO_ONE, ALLEGRO_INVERSE_ALPHA);
    const int font_height = al_get_font_line_height(theme.font);
@@ -576,11 +600,15 @@ VSlider::VSlider(int cur_value, int max_value) :
 
 void VSlider::on_mouse_button_down(int mx, int my)
 {
+   if (is_disabled()) return;  
+
    this->on_mouse_button_hold(mx, my);
 }
 
 void VSlider::on_mouse_button_hold(int mx, int my)
 {
+   if (is_disabled()) return;
+   
    double r = (double) (this->y2 - 1 - my) / (this->height() - 2);
    r = CLAMP(0.0, r, 1.0);
    cur_value = (int) (r * max_value);
@@ -592,11 +620,14 @@ void VSlider::on_mouse_button_hold(int mx, int my)
 void VSlider::draw()
 {
    const Theme & theme = dialog->get_theme();
+   ALLEGRO_COLOR bg = theme.fg;
+   if(is_disabled()) { bg = al_map_rgb(64, 64, 64); } 
+
    float left = x1 + 0.5, top = y1 + 0.5;
    float right = x2 + 0.5, bottom = y2 + 0.5;
    SaveState state;
 
-   al_draw_rectangle(left, top, right, bottom, theme.fg, 1);
+   al_draw_rectangle(left, top, right, bottom, bg, 1);
 
    double ratio = (double) this->cur_value / (double) this->max_value;
    int ypos = (int) (bottom - 0.5 - (int) (ratio * (height() - 7)));
@@ -606,6 +637,11 @@ void VSlider::draw()
 int VSlider::get_cur_value() const
 {
    return this->cur_value;
+}
+
+int VSlider::get_max_value() const
+{
+   return this->max_value;
 }
 
 void VSlider::set_cur_value(int v)
@@ -623,11 +659,15 @@ HSlider::HSlider(int cur_value, int max_value) :
 
 void HSlider::on_mouse_button_down(int mx, int my)
 {
+   if (is_disabled()) return;
+   
    this->on_mouse_button_hold(mx, my);
 }
 
 void HSlider::on_mouse_button_hold(int mx, int my)
 {
+   if (is_disabled()) return;
+   
    double r = (double) (mx - 1 - this->x1) / (this->width() - 2);
    r = CLAMP(0.0, r, 1.0);
    cur_value = (int) (r * max_value);
@@ -641,8 +681,11 @@ void HSlider::draw()
    const Theme & theme = dialog->get_theme();
    const int cy = (y1 + y2) / 2;
    SaveState state;
+   ALLEGRO_COLOR bg = theme.bg;
+   if(is_disabled()) { bg = al_map_rgb(64, 64, 64); } 
 
-   al_draw_filled_rectangle(x1, y1, x2, y2, theme.bg);
+
+   al_draw_filled_rectangle(x1, y1, x2, y2, bg);
    al_draw_line(x1, cy, x2, cy, theme.fg, 0);
 
    double ratio = (double) this->cur_value / (double) this->max_value;
@@ -653,6 +696,11 @@ void HSlider::draw()
 int HSlider::get_cur_value() const
 {
    return this->cur_value;
+}
+
+int HSlider::get_max_value() const
+{
+   return this->max_value;
 }
 
 void HSlider::set_cur_value(int v)
@@ -677,7 +725,7 @@ TextEntry::~TextEntry()
 
 bool TextEntry::want_key_focus()
 {
-   return true;
+  return !is_disabled();
 }
 
 void TextEntry::got_key_focus()
@@ -694,6 +742,8 @@ void TextEntry::lost_key_focus()
 
 void TextEntry::on_key_down(const ALLEGRO_KEYBOARD_EVENT & event)
 {
+   if (is_disabled()) return;
+   
    switch (event.keycode) {
       case ALLEGRO_KEY_LEFT:
          al_ustr_prev(text, &cursor_pos);
@@ -758,8 +808,12 @@ void TextEntry::draw()
 {
    const Theme & theme = dialog->get_theme();
    SaveState state;
+   
+   ALLEGRO_COLOR bg = theme.bg;
+   if(is_disabled()) { bg = al_map_rgb(64, 64, 64); } 
 
-   al_draw_filled_rectangle(x1, y1, x2, y2, theme.bg);
+
+   al_draw_filled_rectangle(x1, y1, x2, y2, bg);
 
    al_set_blender(ALLEGRO_ADD, ALLEGRO_ONE, ALLEGRO_INVERSE_ALPHA);
 
