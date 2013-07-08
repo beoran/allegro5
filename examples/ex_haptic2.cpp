@@ -742,9 +742,6 @@ int main(int argc, char *argv[])
       }
    }
    
-   
-
-   
    num_haptics = 0;
    
    if(al_is_display_haptic(al_get_current_display())) {
