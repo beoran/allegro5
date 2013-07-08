@@ -10,7 +10,8 @@
 
 #include "allegro5/allegro_font.h"
 #include "allegro5/allegro_image.h"
-#include <allegro5/allegro_primitives.h>
+#include "allegro5/allegro_primitives.h"
+#include "allegro5/allegro_ttf.h"
 
 #include "common.c"
 
@@ -218,8 +219,8 @@ Prog::Prog(const Theme & theme, ALLEGRO_DISPLAY *display) :
    level_label("Level", false),
    start_level_slider(3, 10), end_level_slider(7, 10), 
    ramp_effect_label("Ramp Effect"),
-   start_level_label("Start Lvl.", false),
-   end_level_label("End Lvl.", false),
+   start_level_label("Start Level", false),
+   end_level_label("End Level", false),
    right_saturation_slider(5, 10) , right_coeff_slider(5, 10),
    left_saturation_slider(5, 10)  , left_coeff_slider(5, 10),
    deadband_slider(1, 10)         , center_slider(5,10),
@@ -721,6 +722,8 @@ int main(int argc, char *argv[])
    al_install_haptic();
 
    al_init_font_addon();
+   al_init_image_addon();
+   al_init_ttf_addon();
  
    al_set_new_display_flags(ALLEGRO_GENERATE_EXPOSE_EVENTS);
    display = al_create_display(800, 600);
@@ -728,17 +731,19 @@ int main(int argc, char *argv[])
       abort_example("Unable to create display\n");
    }
    
-   font = al_create_builtin_font();
+   open_log();
+     
+   font = al_load_font("data/DejaVuSans.ttf", 11, 0);
    if (!font) {
-      abort_example("Failed to create builtin font.\n");
+      log_printf("Failed to load data/DejaVuSans.ttf\n");
+      font = al_create_builtin_font();
+      if (!font) {
+        abort_example("Could not create builtin font.\n");
+      }
    }
    
-   /*
-   font = al_load_font("data/fixed_font.tga", 0, 0);
-   if (!font) {
-      abort_example("Failed to load data/fixed_font.tga\n");
-   }
-   */
+   
+
    
    num_haptics = 0;
    
@@ -773,6 +778,8 @@ int main(int argc, char *argv[])
    for (int i = 0; i < num_haptics; i++) { 
       al_release_haptic(haptics[i].haptic); 
    }
+   
+   close_log(false);
 
    al_destroy_font(font);
 
