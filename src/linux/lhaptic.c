@@ -89,6 +89,8 @@ static bool lhap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID *id);
 static bool lhap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID *id);
 static bool lhap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id);
 
+static double lhap_get_autocenter(ALLEGRO_HAPTIC *dev);
+static double lhap_set_autocenter(ALLEGRO_HAPTIC *dev, double);
 
 ALLEGRO_HAPTIC_DRIVER _al_hapdrv_linux =
 {
@@ -124,7 +126,10 @@ ALLEGRO_HAPTIC_DRIVER _al_hapdrv_linux =
    lhap_is_effect_playing,
    lhap_release_effect,
 
-   lhap_release
+   lhap_release,
+   
+   lhap_get_autocenter,
+   lhap_set_autocenter
 };
 
 
@@ -153,6 +158,7 @@ static const struct CAP_MAP cap_map[] = {
    { FF_SAW_DOWN, ALLEGRO_HAPTIC_SAW_DOWN },
    { FF_CUSTOM,   ALLEGRO_HAPTIC_CUSTOM },
    { FF_GAIN,     ALLEGRO_HAPTIC_GAIN },
+   { FF_AUTOCENTER, ALLEGRO_HAPTIC_AUTOCENTER },
    { -1,          -1 }
 };
 
@@ -598,6 +604,9 @@ static double lhap_get_gain(ALLEGRO_HAPTIC *dev)
 {
    ALLEGRO_HAPTIC_LINUX *lhap = lhap_from_al(dev);
    (void)dev;
+   if(!al_is_haptic_capable(hap, ALLEGRO_HAPTIC_GAIN)) { 
+     return 0.0;  
+   } 
 
    /* Unfortunately there seems to be no API to GET gain, only to set?!
     * So, return the stored gain.
@@ -622,6 +631,37 @@ static bool lhap_set_gain(ALLEGRO_HAPTIC *dev, double gain)
    return true;
 }
 
+
+static bool lhap_set_autocenter(ALLEGRO_HAPTIC *dev, double autocenter)
+{
+   ALLEGRO_HAPTIC_LINUX *lhap = lhap_from_al(dev);
+   struct input_event ie;
+
+   lhap->parent.autocenter = autocenter;
+   timerclear(&ie.time);
+   ie.type = EV_FF;
+   ie.code = FF_AUTOCENTER;
+   ie.value = (__s32) ((double)0xFFFF * gain);
+   if (write(lhap->fd, &ie, sizeof(ie)) < 0) {
+      return false;
+   }
+   return true;
+}
+
+static double lhap_get_autocenter(ALLEGRO_HAPTIC *dev)
+{
+   ALLEGRO_HAPTIC_LINUX *lhap = lhap_from_al(dev);
+   (void)dev;
+   
+   if(!al_is_haptic_capable(hap, ALLEGRO_HAPTIC_AUTOCENTER)) { 
+     return 0.0;
+   }
+
+   /* Unfortunately there seems to be no API to GET gain, only to set?!
+    * So, return the stored autocenter.
+    */
+   return lhap->parent.autocenter;
+}
 
 int lhap_get_num_effects(ALLEGRO_HAPTIC *dev)
 {
