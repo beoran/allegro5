@@ -46,6 +46,8 @@ typedef struct ALLEGRO_HAPTIC_DRIVER
    AL_METHOD(bool, is_effect_playing, (ALLEGRO_HAPTIC_EFFECT_ID *));
    AL_METHOD(bool, release_effect, (ALLEGRO_HAPTIC_EFFECT_ID *));
    AL_METHOD(bool, release, (ALLEGRO_HAPTIC *));
+   AL_METHOD(double, get_autocenter, (ALLEGRO_HAPTIC *));
+   AL_METHOD(bool, set_autocenter, (ALLEGRO_HAPTIC *, double));  
 } ALLEGRO_HAPTIC_DRIVER;
 
 
@@ -61,8 +63,9 @@ enum ALLEGRO_HAPTIC_PARENT {
 struct ALLEGRO_HAPTIC
 {
    enum ALLEGRO_HAPTIC_PARENT from;
-   void *device;
+   void * device;
    double gain;
+   double autocenter;
 };
 
 
