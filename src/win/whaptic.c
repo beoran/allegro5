@@ -25,5 +25,10 @@
 #error something is wrong with the makefile
 #endif
 
+/* Construct the DirectInput haptics driver list */
+_AL_BEGIN_HAPTIC_DRIVER_LIST
+
+_AL_END_HAPTIC_DRIVER_LIST
+
 
 

@@ -63,5 +63,24 @@ AL_VAR(struct ALLEGRO_JOYSTICK_DRIVER, _al_joydrv_directx);
    { AL_JOY_TYPE_DIRECTX,  &_al_joydrv_directx,    true  },
 
 
-/** HAPTIC driver ID */
-#define _ALLEGRO_HAPDRV_WINDOWS    AL_ID('W','I','N','H')
+/*******************************************/
+/************ haptic drivers   *************/
+/*******************************************/
+
+#define AL_HAPTIC_TYPE_DIRECTX   AL_ID('D','X','H','D')
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+AL_VAR(struct ALLEGRO_HAPTIC_DRIVER, _al_hapdrv_directx);
+
+#ifdef __cplusplus
+}
+#endif
+
+#define _AL_HAPTIC_DRIVER_DIRECTX                                     \
+   { AL__TYPE_DIRECTX,  &_al_hapdrv_directx,    true  },
+
+
+
