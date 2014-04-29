@@ -61,15 +61,31 @@ ALLEGRO_DEBUG_CHANNEL("whaptic")
 /* Support at most 3 axes per device. */
 #define HAPTICS_AXES_MAX        3
 
+/** This union is needed to avoid 
+ dynamical memory allocation. */
+
+typedef union {
+  DICONSTANTFORCE constant;
+  DIRAMPFORCE     ramp;
+  DIPERIODIC      periodic;
+  DICONDITION     condition;
+  DICUSTOMFORCE   custom;
+} ALLEGRO_HAPTIC_PARAMETER_WINDOWS;
+
+
 /*
- * Haptic system effect data.
+ * Haptic effect system data.
  */
 typedef struct 
 {
-   bool                active;
-   DIEFFECT            effect;
-   LPDIRECTINPUTEFFECT ref;
-   /* XINPUT_VIBRATION vibration; */
+   bool                                 active;
+   DIEFFECT                             effect;
+   DIENVELOPE                           envelope;
+   LPDIRECTINPUTEFFECT                  ref;
+   DWORD                                axes[HAPTICS_AXES_MAX];
+   LONG                                 directions[HAPTICS_AXES_MAX];
+   ALLEGRO_HAPTIC_PARAMETER_WINDOWS     parameter;
+   const GUID                         * guid;
 } ALLEGRO_HAPTIC_EFFECT_WINDOWS ;
 
 
@@ -241,13 +257,55 @@ static ALLEGRO_HAPTIC_WINDOWS *whap_get_available_haptic(void)
    return NULL;
 }
 
+ /* Look for a free haptic effect slot for a device and return it, 
+  * or NULL if exhausted. Also initializes the effect 
+  * reference to NULL. */
+static ALLEGRO_HAPTIC_EFFECT_WINDOWS *whap_get_available_effect(
+  ALLEGRO_HAPTIC_WINDOWS * whap) {
+  ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff; 
+  int i;
+   for (i = 0; i < al_get_num_haptic_effects(&whap->parent); i++) {
+      if (!whap->effects[i].active) {
+         weff = whap->effects + i;
+         weff->active = true;
+         weff->ref    = NULL;
+         return weff;
+      }
+   }
+   return NULL;
+}
+
+
+/* Releases a windows haptics effect and unloads it from the device. */
+static bool whap_release_effect_windows(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff) {
+   bool result = true;
+   if(!weff->active) return false; /* already not in use, bail out. */
+    
+   /* Unload the effect from the device. */
+   if(weff->ref) { 
+      HRESULT ret;     
+      ret = IDirectInputEffect_Unload(weff->ref);
+      if (FAILED(ret)) { 
+         ALLEGRO_WARN("Could not unload effect.");
+         result = false;
+      }
+   }
+   /* Custom force needs to clean up it's data. */
+   if (weff->guid == &GUID_CustomForce) { 
+    al_free(weff->parameter.custom.rglForceData);
+    weff->parameter.custom.rglForceData = NULL;
+   }   
+   weff->active = false; /* not in use */
+   weff->ref    = NULL; /* No reference to effect anymore. */  
+   return result;
+}
+
 
 /* Converts a generic haptic device to a Windows-specific one. */
 static ALLEGRO_HAPTIC_WINDOWS *whap_from_al(ALLEGRO_HAPTIC *hap)
 {
-   return (ALLEGRO_HAPTIC_WINDOWS *) hap;
+  return (ALLEGRO_HAPTIC_WINDOWS *) hap;
 }
-
 
 static void whap_exit_haptic(void)
 {
@@ -256,248 +314,357 @@ static void whap_exit_haptic(void)
    haptic_mutex = NULL;
 }
 
-#ifdef _COMMENT_
-static bool whap_type2win(__u16 *res, int type)
+/* Convert the type of the periodic allegro effect to the windows effect*/
+static bool whap_periodictype2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, ALLEGRO_HAPTIC_EFFECT * effect)
 {
-   ASSERT(res);
+  switch (effect->data.periodic.waveform) {
+    case ALLEGRO_HAPTIC_SINE: 
+      weff->guid = &GUID_Sine;      
+      return true;
+      
+    case ALLEGRO_HAPTIC_SQUARE: 
+      weff->guid = &GUID_Square;
+      return true;
+      
+    case ALLEGRO_HAPTIC_TRIANGLE: 
+      weff->guid = &GUID_Triangle;
+      return true;
+      
+    case ALLEGRO_HAPTIC_SAW_UP: 
+      weff->guid = &GUID_SawtoothUp;
+      return true;
+      
+    case ALLEGRO_HAPTIC_SAW_DOWN: 
+      weff->guid = &GUID_SawtoothDown;
+      return true;
+      
+    case ALLEGRO_HAPTIC_CUSTOM: 
+      weff->guid = &GUID_CustomForce;
+      return true;
+    default:
+      return false;
+  }
+}
 
-   switch (type) {
+/* Convert the type of the allegro effect to the windows effect*/
+static bool whap_type2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, ALLEGRO_HAPTIC_EFFECT * effect)
+{
+   switch (effect->type) {
       case ALLEGRO_HAPTIC_RUMBLE:
-         (*res) = FF_RUMBLE;
-         break;
+         weff->guid = &GUID_Sine;
+         return true;
       case ALLEGRO_HAPTIC_PERIODIC:
-         (*res) = FF_PERIODIC;
-         break;
+         return whap_periodictype2win(weff, effect);
       case ALLEGRO_HAPTIC_CONSTANT:
-         (*res) = FF_CONSTANT;
-         break;
+         weff->guid = &GUID_ConstantForce;
+         return true;
       case ALLEGRO_HAPTIC_SPRING:
-         (*res) = FF_SPRING;
-         break;
+         weff->guid = &GUID_Spring;
+         return true;
       case ALLEGRO_HAPTIC_FRICTION:
-         (*res) = FF_FRICTION;
-         break;
+         weff->guid = &GUID_Friction;
+         return true;
       case ALLEGRO_HAPTIC_DAMPER:
-         (*res) = FF_DAMPER;
-         break;
+         weff->guid = &GUID_Damper;
+         return true;
       case ALLEGRO_HAPTIC_INERTIA:
-         (*res) = FF_INERTIA;
-         break;
+         weff->guid = &GUID_Inertia;
+         return true;
       case ALLEGRO_HAPTIC_RAMP:
-         (*res) = FF_RAMP;
-         break;
+         weff->guid = &GUID_RampForce;
+         return true;
       default:
-         return false;
+         return NULL;
    }
    return true;
 }
 
-
-static bool whap_wave2lin(__u16 *res, int type)
+/* Convert the direction of the allegro effect to the windows effect*/
+static bool whap_direction2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                               ALLEGRO_HAPTIC_EFFECT * effect,
+                               ALLEGRO_HAPTIC_WINDOWS * whap)
 {
-   ASSERT(res);
-
-   switch (type) {
-      case ALLEGRO_HAPTIC_SQUARE:
-         (*res) = FF_SQUARE;
-         break;
-      case ALLEGRO_HAPTIC_TRIANGLE:
-         (*res) = FF_TRIANGLE;
-         break;
-      case ALLEGRO_HAPTIC_SINE:
-         (*res) = FF_SINE;
-         break;
-      case ALLEGRO_HAPTIC_SAW_UP:
-         (*res) = FF_SAW_UP;
-         break;
-      case ALLEGRO_HAPTIC_SAW_DOWN:
-         (*res) = FF_SAW_DOWN;
-         break;
-      case ALLEGRO_HAPTIC_CUSTOM:
-         (*res) = FF_CUSTOM;
-         break;
-      default:
-         return false;
-   }
+   int index;
+   /* Use spherical coordinates in correspondance with the Allegro API. */
+   weff->effect.dwFlags          = DIEFF_SPHERICAL | DIEFF_OBJECTOFFSETS;
+   /* Prepare axes. */
+   weff->effect.cAxes            = whap->naxes;
+   memset((void *) weff->axes      , 0, sizeof(weff->axes));   
+   for(index = 0; index < whap->naxes; index ++) {
+      weff->axes[index] = whap->axes[index];
+   }  
+   weff->effect.rgdwAxes         = weff->axes;
+   /* Set up directions as well.. */
+   memset((void *) weff->directions, 0, sizeof(weff->directions));
+   
+   /* Zero or 1 axes means no direction anyway, start concerting from 2 
+    * available axes on the device.  
+    * 
+    * Two axes or more means we have to convert the angle of the 
+    * allegro effect's direction to that which DirectInput uses.
+    * Directinput starts on the right, while Allegro  API towards the 
+    * user, both clockwise. In Allegro API, right is 3*PI/2, so substract 
+    * that first, then scale to degrees * 100. 
+    */  
+   if (whap->naxes > 1) {   
+     double angle = effect->direction.angle - ((3.0* ALLEGRO_PI) / 2.0);
+     weff->directions[0] = (long) (angle * 36000.0 / (2.0*ALLEGRO_PI));
+   } 
+   
+   /* Three axes or more. Convert the azimuth of the allegro effect.
+    * The allegro azimuth is 0 in the plane of the user and increases up.
+    * The rotation in dinput is in the inverse direction (bummer) 
+    * but fortunately it starts also at 0 in the plane of the user as it 
+    * is in the allegro API.     
+    */
+   if (whap->naxes > 2) {
+      double azimuth = - effect->direction.azimuth;      
+      weff->directions[1] = (long) (azimuth * 36000.0 / (ALLEGRO_PI/2.0));
+   }    
+   weff->effect.rglDirection     = weff->directions;  
    return true;
 }
 
-
-/* Converts the time in seconds to a Linux-compatible time.
+/* Converts the time in seconds to a Windows-compatible time.
  * Return false if out of bounds.
  */
-static bool whap_time2lin(__u16 *res, double sec)
+static bool whap_time2win(DWORD *res, double sec)
 {
    ASSERT(res);
 
-   if (sec < 0.0 || sec > 32.767)
+   if (sec < 0.0 || sec >= 4294.967296)
       return false;
-   (*res) = (__u16) round(sec * 1000.0);
+   (*res) = (DWORD) floor(sec * 1000000.0);
    return true;
 }
 
-
-/* Converts the time in seconds to a Linux-compatible time.
- * Return false if out of bounds. This one allows negative times.
- */
-static bool whap_stime2lin(__s16 *res, double sec)
-{
-   ASSERT(res);
-
-   if (sec < -32.767 || sec > 32.767)
-      return false;
-   (*res) = (__s16) round(sec * 1000.0);
-   return true;
-}
-
-
-/* Converts replay data to Linux-compatible data. */
-static bool whap_replay2lin(struct ff_replay *lin,
-   struct ALLEGRO_HAPTIC_REPLAY *al)
-{
-   return whap_time2lin(&lin->delay, al->delay)
-      && whap_time2lin(&lin->length, al->length);
-}
-
-
-/* Converts the level in range 0.0 to 1.0 to a Linux-compatible level.
+/* Converts the level in range 0.0 to 1.0 to a Windows-compatible level.
  * Returns false if out of bounds.
  */
-static bool whap_level2lin(__u16 *res, double level)
+static bool whap_level2win(DWORD *res, double level)
 {
    ASSERT(res);
 
    if (level < 0.0 || level > 1.0)
       return false;
-   *res = (__u16) round(level * (double)0x7fff);
+   *res = (DWORD) floor(level * DI_FFNOMINALMAX);
    return true;
 }
 
 
-/* Converts the level in range -1.0 to 1.0 to a Linux-compatible level.
+/* Converts the level in range -1.0 to 1.0 to a Windows-compatible level.
  * Returns false if out of bounds.
  */
-static bool whap_slevel2lin(__s16 *res, double level)
+static bool whap_slevel2win(LONG*res, double level)
 {
    ASSERT(res);
 
-   if (level < -1.0 || level > 1.0)
+   if (level < 1.0 || level > 1.0)
       return false;
-   *res = (__s16) round(level * (double)0x7ffe);
+   *res = (LONG) (level * DI_FFNOMINALMAX);
+   return true;
+}
+
+/* Converts a phase in range 0.0 to 1.0 to a Windows-compatible level.
+ * Returns false if out of bounds.
+ */
+static bool whap_phase2win(DWORD * res, double phase)
+{
+   ASSERT(res);
+
+   if (phase < 0.0 || phase > 1.0)
+      return false;
+   *res = (DWORD) (phase * 35999);
    return true;
 }
 
 
-/* Converts an Allegro haptic effect envelope to Linux input API. */
-static bool whap_envelope2lin(struct ff_envelope *lin,
-   struct ALLEGRO_HAPTIC_ENVELOPE *al)
+/* Converts replay data to Widows-compatible data. */
+static bool whap_replay2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                               ALLEGRO_HAPTIC_EFFECT * effect)
 {
-   return whap_time2lin(&lin->attack_length, al->attack_length)
-      && whap_time2lin(&lin->fade_length, al->fade_length)
-      && whap_level2lin(&lin->attack_level, al->attack_level)
-      && whap_level2lin(&lin->fade_level, al->fade_level);
+   return whap_time2win(&weff->effect.dwStartDelay, effect->replay.delay)
+      && whap_time2win(&weff->effect.dwDuration,  effect->replay.length);
 }
 
 
-/* Converts a rumble effect to Linux input API. */
-static bool whap_rumble2lin(struct ff_rumble_effect *lin,
-   struct ALLEGRO_HAPTIC_RUMBLE_EFFECT *al)
+/* Converts an Allegro haptic effect envelope to directinput API. */
+static bool whap_envelope2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                               ALLEGRO_HAPTIC_ENVELOPE * aenv)
 {
-   return whap_level2lin(&lin->strong_magnitude, al->strong_magnitude)
-      && whap_level2lin(&lin->weak_magnitude, al->weak_magnitude);
+  /* Prepare envelope. */
+   DIENVELOPE              * wenv = &weff->envelope;
+   memset((void *) wenv, 0, sizeof(DIENVELOPE));
+   weff->envelope.dwSize         = sizeof(DIENVELOPE);  
+   weff->effect.lpEnvelope       = wenv;
+  
+   return whap_time2win(&wenv->dwAttackTime     , aenv->attack_length)
+      && whap_time2win(&wenv->dwFadeTime        , aenv->fade_length)
+      && whap_level2win(&wenv->dwAttackLevel    , aenv->attack_level)
+      && whap_level2win(&wenv->dwFadeLevel      , aenv->fade_level);
+}
+
+/* Converts a constant effect to directinput API. */
+static bool whap_constant2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                               ALLEGRO_HAPTIC_EFFECT * effect) 
+{ 
+   weff->effect.cbTypeSpecificParams  = sizeof(weff->parameter.constant);
+   weff->effect.lpvTypeSpecificParams = &weff->parameter.constant;
+   return whap_envelope2win(weff, &effect->data.constant.envelope)
+      && whap_slevel2win(&weff->parameter.constant.lMagnitude, effect->data.constant.level);
 }
 
 
-/* Converts a constant effect to Linux input API. */
-static bool whap_constant2lin(struct ff_constant_effect *lin,
-   struct ALLEGRO_HAPTIC_CONSTANT_EFFECT *al)
+/* Converts a ramp effect to directinput input API. */
+static bool whap_ramp2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                               ALLEGRO_HAPTIC_EFFECT * effect)
 {
-   return whap_envelope2lin(&lin->envelope, &al->envelope)
-      && whap_slevel2lin(&lin->level, al->level);
+  weff->effect.cbTypeSpecificParams  = sizeof(weff->parameter.ramp);
+  weff->effect.lpvTypeSpecificParams = &weff->parameter.ramp;
+      
+  return whap_envelope2win(weff, &effect->data.ramp.envelope)
+      && whap_slevel2win(&weff->parameter.ramp.lStart, effect->data.ramp.start_level)
+      && whap_slevel2win(&weff->parameter.ramp.lEnd  , effect->data.ramp.end_level);
+}
+
+/* Converts a condition effect to directinput input API. */
+static bool whap_condition2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                               ALLEGRO_HAPTIC_EFFECT * effect)
+{
+  weff->effect.cbTypeSpecificParams  = sizeof(weff->parameter.condition);
+  weff->effect.lpvTypeSpecificParams = &weff->parameter.condition;
+  /* XXX: no envelope here ???  */
+      
+  return whap_level2win(&weff->parameter.condition.dwNegativeSaturation, effect->data.condition.left_saturation)
+      && whap_level2win(&weff->parameter.condition.dwPositiveSaturation, effect->data.condition.right_saturation)      
+      && whap_slevel2win(&weff->parameter.condition.lNegativeCoefficient, effect->data.condition.left_coeff)
+      && whap_slevel2win(&weff->parameter.condition.lPositiveCoefficient, effect->data.condition.right_coeff)
+      && whap_slevel2win(&weff->parameter.condition.lDeadBand          , effect->data.condition.deadband)
+      && whap_slevel2win(&weff->parameter.condition.lOffset            , effect->data.condition.center);
+}
+
+/* Converts a custom effect to directinput input API. */
+static bool whap_custom2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                            ALLEGRO_HAPTIC_EFFECT * effect) {
+  int index;
+  weff->effect.cbTypeSpecificParams  = sizeof(weff->parameter.custom);
+  weff->effect.lpvTypeSpecificParams = &weff->parameter.custom;
+  weff->parameter.custom.cChannels = 1;
+  weff->parameter.custom.cSamples  = effect->data.periodic.custom_len;
+  /* Use al malloc only in this case since the custom_data can be arbitrarily long. */
+  weff->parameter.custom.rglForceData = (LONG *) al_malloc(sizeof(LONG) * effect->data.periodic.custom_len);
+  if(!weff->parameter.custom.rglForceData) return false;
+  /* Gotta copy this to long values, and scale them too... */
+  for(index =0; index < effect->data.periodic.custom_len; index ++) {
+    weff->parameter.custom.rglForceData[index] =
+    (LONG)(effect->data.periodic.custom_data[index] * ((double)(1<<31)));    
+  }
+  return true;
 }
 
 
-/* Converts a ramp effect to Linux input API. */
-static bool whap_ramp2lin(struct ff_ramp_effect *lin,
-   struct ALLEGRO_HAPTIC_RAMP_EFFECT *al)
-{
-   return whap_envelope2lin(&lin->envelope, &al->envelope)
-      && whap_slevel2lin(&lin->start_level, al->start_level)
-      && whap_slevel2lin(&lin->end_level, al->end_level);
+/* Converts a periodic effect to directinput input API. */
+static bool whap_periodic2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                               ALLEGRO_HAPTIC_EFFECT * effect)
+{  
+  if (effect->data.periodic.waveform == ALLEGRO_HAPTIC_CUSTOM) {
+    return whap_custom2win(weff, effect);
+  }
+  
+  weff->effect.cbTypeSpecificParams  = sizeof(weff->parameter.periodic);
+  weff->effect.lpvTypeSpecificParams = &weff->parameter.periodic;
+      
+  return whap_envelope2win(weff, &effect->data.periodic.envelope)
+      && whap_level2win(&weff->parameter.periodic.dwMagnitude, effect->data.periodic.magnitude)
+      && whap_phase2win(&weff->parameter.periodic.dwPhase    , effect->data.periodic.phase)    
+      && whap_time2win(&weff->parameter.periodic.dwPeriod    , effect->data.periodic.period)    
+      && whap_slevel2win(&weff->parameter.periodic.lOffset   , effect->data.periodic.offset);
 }
 
 
-/* Converts a ramp effect to Linux input API. */
-static bool whap_condition2lin(struct ff_condition_effect *lin,
-   struct ALLEGRO_HAPTIC_CONDITION_EFFECT *al)
-{
-   return whap_slevel2lin(&lin->center, al->center)
-      && whap_level2lin(&lin->deadband, al->deadband)
-      && whap_slevel2lin(&lin->right_coeff, al->right_coeff)
-      && whap_level2lin(&lin->right_saturation, al->right_saturation)
-      && whap_slevel2lin(&lin->left_coeff, al->left_coeff)
-      && whap_level2lin(&lin->left_saturation, al->left_saturation);
+/* Converts a periodic effect to directinput input API. */
+static bool whap_rumble2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                               ALLEGRO_HAPTIC_EFFECT * effect)
+{  
+  weff->effect.cbTypeSpecificParams  = sizeof(weff->parameter.periodic);
+  weff->effect.lpvTypeSpecificParams = &weff->parameter.periodic;
+  /** Set up a simple sine wave effect for a rumble. */
+  weff->guid                        = &GUID_Sine;        
+  return whap_level2win(&weff->parameter.periodic.dwMagnitude, effect->data.rumble.strong_magnitude)
+      && whap_phase2win(&weff->parameter.periodic.dwPhase    , 0)    
+      && whap_time2win(&weff->parameter.periodic.dwPeriod    , 250000)    
+      && whap_slevel2win(&weff->parameter.periodic.lOffset   , 0);
 }
 
-
-/* Converts a periodic effect to linux input API. */
-static bool whap_periodic2lin(struct ff_periodic_effect *lin,
-   struct ALLEGRO_HAPTIC_PERIODIC_EFFECT *al)
+/* Converts Allegro haptic effect to dinput API. */
+static bool whap_effect2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, 
+                            ALLEGRO_HAPTIC_EFFECT *effect, 
+                            ALLEGRO_HAPTIC_WINDOWS *whap)
 {
-   /* Custom data is not supported yet, because currently no Linux
-    * haptic driver supports it.
-    */
-   if (al->custom_data)
+   /* Generic setup */ 
+   memset((void *) weff, 0, sizeof(*weff));
+   /* Set global stuff. */
+   weff->effect.dwSize           = sizeof(DIEFFECT);
+   weff->effect.dwGain           = DI_FFNOMINALMAX;       
+   weff->effect.dwSamplePeriod   = 0;
+   weff->effect.dwFlags          = DIEFF_OBJECTOFFSETS;
+   weff->effect.lpEnvelope       = NULL;
+  
+   if (!whap_type2win(weff, effect)) {
       return false;
+   }
 
-   return whap_slevel2lin(&lin->magnitude, al->magnitude)
-      && whap_stime2lin(&lin->offset, al->offset)
-      && whap_time2lin(&lin->period, al->period)
-      && whap_time2lin(&lin->phase, al->phase)
-      && whap_wave2lin(&lin->waveform, al->waveform)
-      && whap_envelope2lin(&lin->envelope, &al->envelope);
-}
-
-
-/* Converts Allegro haptic effect to Linux input API. */
-static bool whap_effect2lin(struct ff_effect *lin, ALLEGRO_HAPTIC_EFFECT *al)
-{
-   memset(lin, 0, sizeof(*lin));
-
-   if (!whap_type2lin(&lin->type, al->type))
+   if (!whap_direction2win(weff, effect, whap)) {
       return false;
-   /* lin_effect->replay = effect->re; */
-   lin->direction = (__u16)
-      round(((double)0xC000 * al->direction.angle) / (2 * M_PI));
-   lin->id = -1;
-   if (!whap_replay2lin(&lin->replay, &al->replay))
+   }
+   
+   if (!whap_replay2win(weff, effect)) {
       return false;
-   switch (lin->type) {
-      case FF_RUMBLE:
-         return whap_rumble2lin(&lin->u.rumble, &al->data.rumble);
-      case FF_PERIODIC:
-         return whap_periodic2lin(&lin->u.periodic, &al->data.periodic);
-      case FF_CONSTANT:
-         return whap_constant2lin(&lin->u.constant, &al->data.constant);
-      case FF_RAMP:
-         return whap_ramp2lin(&lin->u.ramp, &al->data.ramp);
-      case FF_SPRING:   /* fall through */
-      case FF_FRICTION: /* fall through */
-      case FF_DAMPER:   /* fall through */
-      case FF_INERTIA:
-         return whap_condition2lin(&lin->u.condition[0], &al->data.condition);
-      default:
-         return false;
+   }
+   
+   
+   switch (effect->type) {
+     case ALLEGRO_HAPTIC_RUMBLE:
+       return whap_rumble2win(weff, effect);
+     case ALLEGRO_HAPTIC_PERIODIC:
+       return whap_periodic2win(weff, effect);
+     case ALLEGRO_HAPTIC_CONSTANT:
+       return whap_constant2win(weff, effect);
+     case ALLEGRO_HAPTIC_RAMP:
+       return whap_ramp2win(weff, effect);
+     case ALLEGRO_HAPTIC_SPRING:
+     case ALLEGRO_HAPTIC_FRICTION:
+     case ALLEGRO_HAPTIC_DAMPER:
+     case ALLEGRO_HAPTIC_INERTIA:
+       return whap_condition2win(weff, effect);
+     default: 
+       return false;
    }
 }
-
-#endif // __COMMENT__
 
 static bool whap_get_active(ALLEGRO_HAPTIC *haptic)
 {
    ALLEGRO_HAPTIC_WINDOWS *whap = whap_from_al(haptic);
    return whap->active;
 }
+
+
+static bool whap_is_dinput_device_haptic(LPDIRECTINPUTDEVICE2 device) {
+   HRESULT ret;
+   DIDEVCAPS dicaps;
+   /* Get capabilities. */
+   memset((void *) &dicaps, 0, sizeof(dicaps));
+   dicaps.dwSize = sizeof (dicaps);
+   ret = IDirectInputDevice8_GetCapabilities(device, &dicaps);
+   if (FAILED(ret)) {
+      ALLEGRO_WARN("IDirectInputDevice8_GetCapabilities failed on %p\n", device);
+      return false;
+   }
+   
+   /** Is it a haptic device? */
+   return ((dicaps.dwFlags & DIDC_FORCEFEEDBACK) == DIDC_FORCEFEEDBACK);
+}
+
 
 
 static bool whap_is_mouse_haptic(ALLEGRO_MOUSE *mouse)
@@ -515,12 +682,7 @@ static bool whap_is_joystick_haptic(ALLEGRO_JOYSTICK *joy)
       return false;
    if (!al_get_joystick_active(joy))
       return false;
-   return false;
-   /*
-   if (ljoy->fd <= 0)
-      return false;
-   return whap_fd_can_ff(ljoy->fd);
-   */
+   return whap_is_dinput_device_haptic(joydx->device);
 }
 
 
@@ -549,6 +711,51 @@ static ALLEGRO_HAPTIC *whap_get_from_mouse(ALLEGRO_MOUSE *mouse)
 {
    (void)mouse;
    return NULL;
+}
+
+
+/* Sets the force feedback gain on a directinput device.
+ Returns true on success and false on failure.  */
+static bool whap_set_dinput_device_gain(LPDIRECTINPUTDEVICE2 device, 
+                                        double gain) {
+   HRESULT ret;
+   DIPROPDWORD dipdw;
+   if (gain < 0.0) return false;
+   if (gain > 1.0) return false;
+   
+   dipdw.diph.dwSize = sizeof(DIPROPDWORD);
+   dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
+   dipdw.diph.dwObj = 0;
+   dipdw.diph.dwHow = DIPH_DEVICE;
+   dipdw.dwData     = gain * DI_FFNOMINALMAX; 
+   
+   ret = IDirectInputDevice8_SetProperty(device,
+                                          DIPROP_FFGAIN, &dipdw.diph);
+   return (!FAILED(ret));
+}
+
+/* Sets the force feedback autocentering intensity on a directinput device.
+ Returns true on success and false on failure. */
+static bool whap_set_dinput_device_autocenter(LPDIRECTINPUTDEVICE2 device, 
+                                              double intensity) {
+   HRESULT ret;
+   DIPROPDWORD dipdw;
+   if (intensity < 0.0) return false;
+   if (intensity > 1.0) return false;
+   
+   dipdw.diph.dwSize = sizeof(DIPROPDWORD);
+   dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
+   dipdw.diph.dwObj = 0;
+   dipdw.diph.dwHow = DIPH_DEVICE;
+   if (intensity < 0.5) { 
+      dipdw.dwData = DIPROPAUTOCENTER_OFF;
+   } else {     
+      dipdw.dwData = DIPROPAUTOCENTER_ON;
+   }
+   /* Try to set the autocenter. */
+   ret = IDirectInputDevice8_SetProperty(device,
+                                         DIPROP_AUTOCENTER, &dipdw.diph);
+   return (!FAILED(ret));
 }
 
 
@@ -597,25 +804,7 @@ whap_check_axes_calback(LPCDIDEVICEOBJECTINSTANCE dev, LPVOID data)
 static bool whap_initialize_dinput(ALLEGRO_HAPTIC_WINDOWS * whap) {
    HRESULT ret;
    ALLEGRO_HAPTIC * haptic = &whap->parent;
-   DIPROPDWORD dipdw;
    
-   DIDEVCAPS dicaps;
-   /* Get capabilities. */
-   memset((void *) &dicaps, 0, sizeof(dicaps));
-   dicaps.dwSize = sizeof (dicaps);
-   ret = IDirectInputDevice8_GetCapabilities(whap->device, &dicaps);
-   if (FAILED(ret)) {
-      ALLEGRO_WARN("IDirectInputDevice8_GetCapabilities failed on %p\n", whap->device);
-      return false;
-   }
-
-   /** Is it a haptic device? */
-   if ((dicaps.dwFlags & DIDC_FORCEFEEDBACK) != DIDC_FORCEFEEDBACK) {
-      return false; 
-   }
-
-   
-  
    /* Get number of axes. */
    ret = IDirectInputDevice8_EnumObjects(whap->device,
                                           whap_check_axes_calback,
@@ -664,27 +853,15 @@ static bool whap_initialize_dinput(ALLEGRO_HAPTIC_WINDOWS * whap) {
       whap->flags |= (ALLEGRO_HAPTIC_PERIODIC | ALLEGRO_HAPTIC_RUMBLE); 
     }  
    
-    /* Check gain capability and set it to maximum in one go. */
-    dipdw.diph.dwSize       = sizeof(DIPROPDWORD);
-    dipdw.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-    dipdw.diph.dwObj        = 0;
-    dipdw.diph.dwHow        = DIPH_DEVICE;
-    dipdw.dwData            = 10000;
-    ret = IDirectInputDevice8_SetProperty(whap->device,
-                                          DIPROP_FFGAIN, &dipdw.diph);
-    if (!FAILED(ret)) {         /* Gain is supported. */
-        whap->flags |= ALLEGRO_HAPTIC_GAIN;
+    if (whap_set_dinput_device_gain(whap->device, 1.0)) { 
+      whap->flags |= ALLEGRO_HAPTIC_GAIN;
     }
     
     /* Check autocenter and turn it off in one go. */
-    dipdw.diph.dwObj = 0;
-    dipdw.diph.dwHow = DIPH_DEVICE;
-    dipdw.dwData = DIPROPAUTOCENTER_OFF;
-    ret = IDirectInputDevice8_SetProperty(whap->device,
-                                          DIPROP_AUTOCENTER, &dipdw.diph);
-    if (!FAILED(ret)) {         /* Autocenter is supported. */
-        whap->flags |= ALLEGRO_HAPTIC_AUTOCENTER;
+    if (whap_set_dinput_device_autocenter(whap->device, 0.0)) { 
+      whap->flags |= ALLEGRO_HAPTIC_AUTOCENTER;
     }
+ 
     return true;
 }
 
@@ -695,7 +872,6 @@ static ALLEGRO_HAPTIC *whap_get_from_joystick(ALLEGRO_JOYSTICK *joy)
 {
    ALLEGRO_JOYSTICK_DIRECTX * joydx = (ALLEGRO_JOYSTICK_DIRECTX *) joy;
    ALLEGRO_HAPTIC_WINDOWS * whap;
-   ALLEGRO_HAPTIC * result = NULL;
    
    int i;
 
@@ -724,13 +900,15 @@ static ALLEGRO_HAPTIC *whap_get_from_joystick(ALLEGRO_JOYSTICK *joy)
    whap->parent.autocenter = 0.0;
    
    /* result is ok if init functions returns true. */
-   if (whap_initialize_dinput(whap)) {
-      result = &whap->parent;  
+   if (!whap_initialize_dinput(whap)) {
+      al_release_haptic(&whap->parent); 
+      al_unlock_mutex(haptic_mutex);
+      return NULL;  
    }
 
    al_unlock_mutex(haptic_mutex);
-
-   return result;
+   
+   return &whap->parent;
 }
 
 
@@ -765,9 +943,7 @@ static int whap_get_capabilities(ALLEGRO_HAPTIC *dev)
 static double whap_get_gain(ALLEGRO_HAPTIC *dev)
 {
    ALLEGRO_HAPTIC_WINDOWS *whap = whap_from_al(dev);
-   /* Unfortunately there seems to be no API to GET gain, only to set?!
-    * So, return the stored gain.
-    */
+   /* Just return the stored gain, it's easier than querying. */
    return whap->parent.gain;
 }
 
@@ -775,26 +951,34 @@ static double whap_get_gain(ALLEGRO_HAPTIC *dev)
 static bool whap_set_gain(ALLEGRO_HAPTIC *dev, double gain)
 {
    ALLEGRO_HAPTIC_WINDOWS *whap = whap_from_al(dev);
-   (void) whap, (void) gain;
-   return false;
+   bool ok = whap_set_dinput_device_gain(whap->device, gain);
+   if (ok) {
+     whap->parent.gain = gain;
+   } else {
+     whap->parent.gain = 1.0;
+   } 
+   return ok;
 }
 
 
-double whap_get_autocenter (ALLEGRO_HAPTIC * dev) 
+double whap_get_autocenter(ALLEGRO_HAPTIC * dev) 
 {
    ALLEGRO_HAPTIC_WINDOWS *whap = whap_from_al(dev);
-   /* Unfortunately there seems to be no API to GET gain, only to set?!
-    * So, return the stored gain.
-    */
-   return whap->parent.gain;
+   /* Return the stored autocenter value. It's easiest like that. */
+   return whap->parent.autocenter;
 }
 
 
 static bool whap_set_autocenter(ALLEGRO_HAPTIC *dev, double intensity)
 {
    ALLEGRO_HAPTIC_WINDOWS *whap = whap_from_al(dev);
-   (void) whap, (void) intensity;
-   return false;
+   bool ok = whap_set_dinput_device_autocenter(whap->device, intensity);
+   if (ok) {
+     whap->parent.autocenter = intensity;
+   } else {
+     whap->parent.autocenter = 0.0;
+   } 
+   return ok;
 }
 
 static int whap_get_num_effects(ALLEGRO_HAPTIC *dev)
@@ -814,80 +998,159 @@ static bool whap_is_effect_ok(ALLEGRO_HAPTIC *haptic,
 
    caps = al_get_haptic_capabilities(haptic);
    if (caps & effect->type) {
-      return true; // whap_effect2lin(&leff, effect);
+      return true; 
    }
+   /* XXX: should do more checking here? */
    return false;
 }
 
 
+/*
 static double whap_effect_duration(ALLEGRO_HAPTIC_EFFECT *effect)
 {
    return effect->replay.delay + effect->replay.length;
 }
-
+*/
 
 static bool whap_upload_effect(ALLEGRO_HAPTIC *dev,
    ALLEGRO_HAPTIC_EFFECT *effect, ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
+   HRESULT ret;
    ALLEGRO_HAPTIC_WINDOWS *whap = whap_from_al(dev);
-
+   ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff = NULL;
+   
    ASSERT(dev);
    ASSERT(id);
    ASSERT(effect);
-
-   /* Set id's values to indicate failure. */
+   
+   /* Set id's values to indicate failure beforehand. */
    id->_haptic = NULL;
    id->_id     = -1;
    id->_handle = -1;
-   return false;
+
+   al_lock_mutex(haptic_mutex);
+   
+   /* Look for a free haptic effect slot. */
+   weff = whap_get_available_effect(whap);
+   /* No more space for an effect. */
+   if (!weff) {
+      ALLEGRO_WARN("No free effect slot.");
+      al_unlock_mutex(haptic_mutex);
+      return false;
+   }  
+  
+   
+   /* Convert the haptic effect to a windows specific one. */
+   if (!whap_effect2win(weff, effect, whap)) {
+      whap_release_effect_windows(weff); /* free effect again. */
+      ALLEGRO_WARN("Could not conver effect.");      
+      al_unlock_mutex(haptic_mutex);
+      return false;
+   }
+   
+   /* Create the effect. */
+   ret = IDirectInputDevice8_CreateEffect(whap->device, (*weff->guid),
+                                          &weff->effect,
+                                          &weff->ref   , NULL);
+   if (FAILED(ret)) {
+      whap_release_effect_windows(weff); /* free effect again. */
+      ALLEGRO_WARN("Could not create effect.");
+      al_unlock_mutex(haptic_mutex);
+      return false;
+   } 
+   
+   /* Upload the effect to the device. */
+   ret = IDirectInputEffect_Download(weff->ref);
+   
+   if (FAILED(ret)) {
+      whap_release_effect_windows(weff); /* free effect again. */
+      ALLEGRO_WARN("Could not create effect.");
+      al_unlock_mutex(haptic_mutex);
+      return false;
+   } 
+   
+   
+   
+   al_unlock_mutex(haptic_mutex);
+   return true;
 }
 
 
 static bool whap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID *id, int loops)
 {
+   HRESULT res;
    ALLEGRO_HAPTIC_WINDOWS *whap = (ALLEGRO_HAPTIC_WINDOWS *) id->_haptic;
-   /*
-   struct input_event play;
-   int fd;
-   double now;
-   double duration;
-   */
-
+   ALLEGRO_HAPTIC_EFFECT_WINDOWS *weff; 
    if (!whap)
       return false;
-
-   return false;
+   weff = whap->effects + id->_id;
+   
+   res = IDirectInputEffect_Start(weff->ref, loops, 0);  
+   if(FAILED(res)) {
+      ALLEGRO_WARN("Failed to play an effect."); 
+      return false;
+   }
+   id->_playing = true;
+   // id->_
+   
+   return true;
 }
 
 
 static bool whap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
-{
+{   
+   HRESULT res;
    ALLEGRO_HAPTIC_WINDOWS *whap = (ALLEGRO_HAPTIC_WINDOWS *) id->_haptic;
- 
+   ALLEGRO_HAPTIC_EFFECT_WINDOWS *weff; 
+   
    if (!whap)
       return false;
-   return false;
+   weff = whap->effects + id->_id;
+   
+   res = IDirectInputEffect_Stop(weff->ref);  
+   if(FAILED(res)) {
+      ALLEGRO_WARN("Failed to play an effect."); 
+      return false;
+   }
+   id->_playing = false;
+   
+   
+   return true;
 }
 
 
 static bool whap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
    ASSERT(id);
-
-   /* Since AFAICS there is no Linux API to test this, use a timer to check
-    * if the effect has been playing long enough to be finished or not.
-    */
-   return (id->_playing && al_get_time() < id->_end_time);
+   HRESULT res;
+   DWORD flags;
+   ALLEGRO_HAPTIC_WINDOWS *whap = (ALLEGRO_HAPTIC_WINDOWS *) id->_haptic;
+   ALLEGRO_HAPTIC_EFFECT_WINDOWS *weff; 
+   
+   if (!whap)
+      return false;
+   weff = whap->effects + id->_id;
+   
+   res = IDirectInputEffect_GetEffectStatus(weff->ref, &flags);  
+   if(FAILED(res)) {
+      ALLEGRO_WARN("Failed to get the status of effect."); 
+      return false;
+   }
+   return ((flags & DIEGES_PLAYING) == DIEGES_PLAYING);
 }
+
 
 
 static bool whap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
    ALLEGRO_HAPTIC_WINDOWS *whap = (ALLEGRO_HAPTIC_WINDOWS *)id->_haptic;
-
+   ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff;
+   
+   
    whap_stop_effect(id);
-   whap->effects[id->_id].active = false; /* not in use */
-   return true;
+   
+   weff = whap->effects + id->_id;
+   return whap_release_effect_windows(weff);
 }
 
 
@@ -895,10 +1158,16 @@ static bool whap_release(ALLEGRO_HAPTIC *haptic)
 {
    ALLEGRO_HAPTIC_WINDOWS *whap = whap_from_al(haptic);
    ASSERT(haptic);
+   int index;
 
    if (!whap->active)
       return false;
-
+   
+   /* Release all effects for this device. */
+   for (index = 0; index < HAPTICS_EFFECTS_MAX ; index ++) {
+     whap_release_effect_windows(whap->effects + index);
+   }
+   
    whap->active = false;
    whap->device = NULL;
    return true;
