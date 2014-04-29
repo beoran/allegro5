@@ -401,7 +401,9 @@ a haptic effect. The intensity parameter should be passed with a value
 between 0.0 and 1.0. The value 0.0 means automatic centering is 
 disabled, and 1.0 means full strength automatic centering. Any value
 in between those two extremes will result in partial automatic 
-centering.
+centering. Some platforms do not support partial automatic 
+centering. If that is the case, a value of less than 0.5 will turn 
+it off, while a value equal to or higher to 0.5 will turn it on.
 Returns true if set sucessfully, false if not.
 Can only work if [al_get_haptic_capabilities] returns a value that has
 [ALLEGRO_HAPTIC_AUTOCENTER] set.  If not, this function returns false.
@@ -417,7 +419,9 @@ a haptic effect. The return value can be between 0.0 and 1.0.
 The value 0.0 means automatic centering is disabled, and 1.0 means 
 automatic centering is enabled at full strength. Any value
 in between those two extremes means partial automatic 
-centering is enabled.
+centering is enabled. Some platforms do not support partial automatic 
+centering. If that is the case, a value of less than 0.5 means it is turned 
+off, while a value equal to or higher to 0.5 means it is turned on.
 Can only work if [al_get_haptic_capabilities] returns a 
 value that has [ALLEGRO_HAPTIC_AUTOCENTER] set. If not, this function 
 returns 0.0.
