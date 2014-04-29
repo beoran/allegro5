@@ -97,6 +97,7 @@ set(ALLEGRO_SRC_UNIX_FILES
     src/unix/udrvlist.c
     src/unix/ufdwatch.c
     src/unix/ugfxdrv.c
+    src/unix/uhapdrv.c
     src/unix/ujoydrv.c
     src/unix/ukeybd.c
     src/unix/umouse.c
