@@ -90,7 +90,7 @@ static bool lhap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID *id);
 static bool lhap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id);
 
 static double lhap_get_autocenter(ALLEGRO_HAPTIC *dev);
-static double lhap_set_autocenter(ALLEGRO_HAPTIC *dev, double);
+static bool lhap_set_autocenter(ALLEGRO_HAPTIC *dev, double);
 
 ALLEGRO_HAPTIC_DRIVER _al_hapdrv_linux =
 {
@@ -604,10 +604,11 @@ static double lhap_get_gain(ALLEGRO_HAPTIC *dev)
 {
    ALLEGRO_HAPTIC_LINUX *lhap = lhap_from_al(dev);
    (void)dev;
-   if(!al_is_haptic_capable(hap, ALLEGRO_HAPTIC_GAIN)) { 
+   
+   if(!al_is_haptic_capable(dev, ALLEGRO_HAPTIC_GAIN)) { 
      return 0.0;  
    } 
-
+   
    /* Unfortunately there seems to be no API to GET gain, only to set?!
     * So, return the stored gain.
     */
@@ -641,7 +642,7 @@ static bool lhap_set_autocenter(ALLEGRO_HAPTIC *dev, double autocenter)
    timerclear(&ie.time);
    ie.type = EV_FF;
    ie.code = FF_AUTOCENTER;
-   ie.value = (__s32) ((double)0xFFFF * gain);
+   ie.value = (__s32) ((double)0xFFFF * autocenter);
    if (write(lhap->fd, &ie, sizeof(ie)) < 0) {
       return false;
    }
@@ -653,7 +654,7 @@ static double lhap_get_autocenter(ALLEGRO_HAPTIC *dev)
    ALLEGRO_HAPTIC_LINUX *lhap = lhap_from_al(dev);
    (void)dev;
    
-   if(!al_is_haptic_capable(hap, ALLEGRO_HAPTIC_AUTOCENTER)) { 
+   if(!al_is_haptic_capable(dev, ALLEGRO_HAPTIC_AUTOCENTER)) { 
      return 0.0;
    }
 
@@ -691,12 +692,6 @@ static bool lhap_is_effect_ok(ALLEGRO_HAPTIC *haptic,
       return lhap_effect2lin(&leff, effect);
    }
    return false;
-}
-
-
-static double lhap_effect_duration(ALLEGRO_HAPTIC_EFFECT *effect)
-{
-   return effect->replay.delay + effect->replay.length;
 }
 
 
@@ -747,7 +742,7 @@ static bool lhap_upload_effect(ALLEGRO_HAPTIC *dev,
    id->_haptic = dev;
    id->_id = found;
    id->_handle = leff.id;
-   id->_effect_duration = lhap_effect_duration(effect);
+   id->_effect_duration = al_get_haptic_effect_duration(effect);
    id->_playing = false;
 
    /* XXX should be bool or something? */

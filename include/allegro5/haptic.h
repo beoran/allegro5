@@ -186,6 +186,7 @@ struct ALLEGRO_HAPTIC_EFFECT_ID
    ALLEGRO_HAPTIC *_haptic;
    int _id;
    int _handle;
+   void * _pointer;
    double _effect_duration;
    bool _playing;
    double _start_time;
@@ -230,6 +231,7 @@ AL_FUNC(bool, al_upload_and_play_haptic_effect, (ALLEGRO_HAPTIC *, ALLEGRO_HAPTI
 AL_FUNC(bool, al_stop_haptic_effect, (ALLEGRO_HAPTIC_EFFECT_ID *));
 AL_FUNC(bool, al_is_haptic_effect_playing, (ALLEGRO_HAPTIC_EFFECT_ID *));
 AL_FUNC(bool, al_release_haptic_effect, (ALLEGRO_HAPTIC_EFFECT_ID *));
+AL_FUNC(double, al_get_haptic_effect_duration, (ALLEGRO_HAPTIC_EFFECT *));
 AL_FUNC(bool, al_rumble_haptic, (ALLEGRO_HAPTIC *, double, double, ALLEGRO_HAPTIC_EFFECT_ID *));
 
 
