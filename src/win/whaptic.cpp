@@ -78,6 +78,7 @@ typedef union {
  */
 typedef struct 
 {
+   int                                  id;
    bool                                 active;
    DIEFFECT                             effect;
    DIENVELOPE                           envelope;
@@ -152,9 +153,9 @@ static bool whap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id);
 static double whap_get_autocenter(ALLEGRO_HAPTIC *dev);
 static bool whap_set_autocenter(ALLEGRO_HAPTIC *dev, double);
 
-ALLEGRO_HAPTIC_DRIVER _al_hapdrv_windows =
-{
-   _ALLEGRO_HAPDRV_WINDOWS,
+ALLEGRO_HAPTIC_DRIVER _al_hapdrv_directx =
+{   
+   AL_HAPTIC_TYPE_DIRECTX,
    "",
    "",
    "Windows haptic(s)",
@@ -266,7 +267,8 @@ static ALLEGRO_HAPTIC_EFFECT_WINDOWS *whap_get_available_effect(
   int i;
    for (i = 0; i < al_get_num_haptic_effects(&whap->parent); i++) {
       if (!whap->effects[i].active) {
-         weff = whap->effects + i;
+         weff         = whap->effects + i;
+         weff->id     = i;
          weff->active = true;
          weff->ref    = NULL;
          return weff;
@@ -279,6 +281,7 @@ static ALLEGRO_HAPTIC_EFFECT_WINDOWS *whap_get_available_effect(
 /* Releases a windows haptics effect and unloads it from the device. */
 static bool whap_release_effect_windows(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff) {
    bool result = true;
+   if(!weff) return false; /* make it easy to handle alll cases later on.*/
    if(!weff->active) return false; /* already not in use, bail out. */
     
    /* Unload the effect from the device. */
@@ -292,9 +295,9 @@ static bool whap_release_effect_windows(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff) {
    }
    /* Custom force needs to clean up it's data. */
    if (weff->guid == &GUID_CustomForce) { 
-    al_free(weff->parameter.custom.rglForceData);
-    weff->parameter.custom.rglForceData = NULL;
-   }   
+      al_free(weff->parameter.custom.rglForceData);
+      weff->parameter.custom.rglForceData = NULL;
+   }  
    weff->active = false; /* not in use */
    weff->ref    = NULL; /* No reference to effect anymore. */  
    return result;
@@ -1011,11 +1014,41 @@ static double whap_effect_duration(ALLEGRO_HAPTIC_EFFECT *effect)
    return effect->replay.delay + effect->replay.length;
 }
 */
+static bool whap_upload_effect_helper
+  (ALLEGRO_HAPTIC_WINDOWS         * whap, 
+   ALLEGRO_HAPTIC_EFFECT_WINDOWS  * weff,
+   ALLEGRO_HAPTIC_EFFECT          * effect
+  ) 
+{
+   HRESULT ret;
+   if (!whap_effect2win(weff, effect, whap)) { 
+      ALLEGRO_WARN("Could not convert haptic effect.");      
+      return false;
+   }
+    
+   /* Create the effect. */
+   ret = IDirectInputDevice8_CreateEffect(whap->device, (*weff->guid),
+                                          &weff->effect,
+                                          &weff->ref   , NULL);
+   if (FAILED(ret)) {
+      ALLEGRO_WARN("Could not create haptic effect.");
+      return false;
+   } 
+  
+     /* Upload the effect to the device. */
+   ret = IDirectInputEffect_Download(weff->ref);   
+   if (FAILED(ret)) {
+      ALLEGRO_WARN("Could not upload haptic effect.");
+      return false;
+   }   
+   
+   return true;
+}
 
 static bool whap_upload_effect(ALLEGRO_HAPTIC *dev,
    ALLEGRO_HAPTIC_EFFECT *effect, ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   HRESULT ret;
+   bool ok;
    ALLEGRO_HAPTIC_WINDOWS *whap = whap_from_al(dev);
    ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff = NULL;
    
@@ -1024,10 +1057,12 @@ static bool whap_upload_effect(ALLEGRO_HAPTIC *dev,
    ASSERT(effect);
    
    /* Set id's values to indicate failure beforehand. */
-   id->_haptic = NULL;
-   id->_id     = -1;
-   id->_handle = -1;
-
+   id->_haptic          = NULL;
+   id->_id              = -1;
+   id->_pointer         = NULL;
+   id->_playing         = false;
+   id->_effect_duration = 0.0;
+   
    al_lock_mutex(haptic_mutex);
    
    /* Look for a free haptic effect slot. */
@@ -1035,44 +1070,19 @@ static bool whap_upload_effect(ALLEGRO_HAPTIC *dev,
    /* No more space for an effect. */
    if (!weff) {
       ALLEGRO_WARN("No free effect slot.");
-      al_unlock_mutex(haptic_mutex);
       return false;
    }  
-  
-   
-   /* Convert the haptic effect to a windows specific one. */
-   if (!whap_effect2win(weff, effect, whap)) {
-      whap_release_effect_windows(weff); /* free effect again. */
-      ALLEGRO_WARN("Could not conver effect.");      
-      al_unlock_mutex(haptic_mutex);
-      return false;
-   }
-   
-   /* Create the effect. */
-   ret = IDirectInputDevice8_CreateEffect(whap->device, (*weff->guid),
-                                          &weff->effect,
-                                          &weff->ref   , NULL);
-   if (FAILED(ret)) {
-      whap_release_effect_windows(weff); /* free effect again. */
-      ALLEGRO_WARN("Could not create effect.");
-      al_unlock_mutex(haptic_mutex);
-      return false;
+   ok = whap_upload_effect_helper(whap, weff, effect);
+   if (ok) {
+      /* set ID handle to signify success */
+      id->_haptic  = dev;
+      id->_pointer = weff;
+      id->_id      = weff->id;      
+      id->_effect_duration = al_get_haptic_effect_duration(effect);
    } 
-   
-   /* Upload the effect to the device. */
-   ret = IDirectInputEffect_Download(weff->ref);
-   
-   if (FAILED(ret)) {
-      whap_release_effect_windows(weff); /* free effect again. */
-      ALLEGRO_WARN("Could not create effect.");
-      al_unlock_mutex(haptic_mutex);
-      return false;
-   } 
-   
-   
    
    al_unlock_mutex(haptic_mutex);
-   return true;
+   return ok;
 }
 
 
@@ -1094,6 +1104,12 @@ static bool whap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID *id, int loops)
    // id->_
    
    return true;
+   
+   
+   
+
+   
+   
 }
 
 
