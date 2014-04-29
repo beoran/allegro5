@@ -329,6 +329,12 @@ bool al_is_haptic_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID *id)
    return haptic_driver->is_effect_playing(id);
 }
 
+/* Function: al_get_haptic_effect_duration
+ */
+double al_get_haptic_effect_duration(ALLEGRO_HAPTIC_EFFECT * effect)
+{
+  return effect->replay.delay + effect->replay.length;
+}
 
 /* Function: al_rumble_haptic
  */

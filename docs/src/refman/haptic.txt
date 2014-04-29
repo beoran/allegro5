@@ -95,9 +95,11 @@ direction
 
     In Allegro's coordinate system, the value in `direction.angle` determines
     the planar angle between the effect and the direction of the user who
-    holds the device, expressed in radians.  So, an effect with an angle 0.0
-    takes place in the direction of the user of the haptic device, and an
-    angle of π means in the direction away from the user.
+    holds the device, expressed in radians. This angle increases clockwise
+    away from the user. So, an effect with an angle 0.0 takes place in the 
+    direction of the user of the haptic device, an angle of π/2 is
+    to the left of the user, an angle of π means the direction away from 
+    the user, and an angle of 3π/2 means to the right of the user.
 
     If [al_get_haptic_capabilities] has the flag ALLEGRO_HAPTIC_ANGLE set,
     then setting `direction.angle` is supported. Otherwise, it is
@@ -117,9 +119,9 @@ direction
     The value in `direction.azimuth` determines the elevation angle between
     the effect and the plane in which the user is holding the device,
     expressed in radians. An effect with an azimuth 0.0 plays back in the
-    plane in which the user is holding the device, an azimuth +π/2 means the
-    effect plays back vertically above the user plane, and an azimuth -π/2
-    means the effect plays back vertically below the user plane.
+    plane in which the user is holding the device, an azimuth +π/2 means 
+    the effect plays back vertically above the user plane, and an azimuth 
+    -π/2 means the effect plays back vertically below the user plane.
 
     If [al_get_haptic_capabilities] has the flag ALLEGRO_HAPTIC_AZIMUTH set,
     then setting `direction.azimuth` is supported. Otherwise, it is
@@ -498,11 +500,19 @@ from [al_upload_haptic_effect], [al_upload_and_play_haptic_effect] or
 
 Since: 5.1.8
 
+## API: al_get_haptic_effect_duration
+
+Returns the estimated duration of the given haptic effect. This is merely 
+a convenience function for now, as it returns the sum of 
+`effect.replay.length` and `effect.replay.data`.  
+
+Since: 5.1.9
+
 ## API: al_release_haptic_effect
 
 Releases a previously uploaded haptic effect from the device it has been
-uploaded to, allowing for other effects to be uploaded. The play_id must be a
-valid [ALLEGRO_HAPTIC_EFFECT_ID] obtained from [al_upload_haptic_effect],
+uploaded to, allowing for other effects to be uploaded. The play_id must be 
+a valid [ALLEGRO_HAPTIC_EFFECT_ID] obtained from [al_upload_haptic_effect],
 [al_upload_and_play_haptic_effect] or [al_rumble_haptic].
 
 Since: 5.1.8
