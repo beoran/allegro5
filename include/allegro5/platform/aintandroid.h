@@ -24,8 +24,18 @@ extern "C" {
 
 #include "allegro5/internal/aintern_system.h"
 #include "allegro5/internal/aintern_display.h"
+#include "allegro5/internal/aintern_haptic.h"
 
 ALLEGRO_PATH *_al_android_get_path(int id);
+
+
+/* android_haptic.c */
+#define _ALLEGRO_HAPDRV_ANDROID    AL_ID('A','N','D','H')
+
+#ifdef ALLEGRO_HAVE_LINUX_INPUT_H
+AL_VAR(struct ALLEGRO_HAPTIC_DRIVER, _al_hapdrv_android);
+#endif
+
 
 #ifdef __cplusplus
 }
