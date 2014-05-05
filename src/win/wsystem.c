@@ -311,7 +311,8 @@ static ALLEGRO_JOYSTICK_DRIVER *win_get_joystick_driver(void)
 
 static ALLEGRO_HAPTIC_DRIVER *win_get_haptic_driver(void)
 {
-   return _al_haptic_driver_list[0].driver;
+   return &_al_hapdrv_directx;
+   /* return _al_haptic_driver_list[0].driver; XXX: this list is empty for some reason!?  */
 }
 
 static int win_get_num_display_modes(void)
@@ -698,7 +699,7 @@ static ALLEGRO_SYSTEM_INTERFACE *_al_system_win_driver(void)
    vt->get_keyboard_driver = win_get_keyboard_driver;
    vt->get_mouse_driver = win_get_mouse_driver;
    vt->get_touch_input_driver = win_get_touch_input_driver;
-   vt->get_haptic_driver = win_get_haptic_driver;   
+   vt->get_haptic_driver = win_get_haptic_driver;
    vt->get_joystick_driver = win_get_joystick_driver;
    vt->get_num_display_modes = win_get_num_display_modes;
    vt->get_display_mode = win_get_display_mode;
