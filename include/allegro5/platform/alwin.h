@@ -1,6 +1,6 @@
 /*         ______   ___    ___
  *        /\  _  \ /\_ \  /\_ \
- *        \ \ \L\ \\//\ \ \//\ \      __     __   _ __   ___ 
+ *        \ \ \L\ \\//\ \ \//\ \      __     __   _ __   ___
  *         \ \  __ \ \ \ \  \ \ \   /'__`\ /'_ `\/\`'__\/ __`\
  *          \ \ \/\ \ \_\ \_ \_\ \_/\  __//\ \L\ \ \ \//\ \L\ \
  *           \ \_\ \_\/\____\/\____\ \____\ \____ \ \_\\ \____/
@@ -80,7 +80,7 @@ AL_VAR(struct ALLEGRO_HAPTIC_DRIVER, _al_hapdrv_directx);
 #endif
 
 #define _AL_HAPTIC_DRIVER_DIRECTX                                     \
-   { AL__TYPE_DIRECTX,  &_al_hapdrv_directx,    true  },
+   { AL_HAPTIC_TYPE_DIRECTX,  &_al_hapdrv_directx,    true  },
 
 
 

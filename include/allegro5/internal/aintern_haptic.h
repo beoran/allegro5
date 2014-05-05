@@ -47,7 +47,7 @@ typedef struct ALLEGRO_HAPTIC_DRIVER
    AL_METHOD(bool, release_effect, (ALLEGRO_HAPTIC_EFFECT_ID *));
    AL_METHOD(bool, release, (ALLEGRO_HAPTIC *));
    AL_METHOD(double, get_autocenter, (ALLEGRO_HAPTIC *));
-   AL_METHOD(bool, set_autocenter, (ALLEGRO_HAPTIC *, double));  
+   AL_METHOD(bool, set_autocenter, (ALLEGRO_HAPTIC *, double));
 } ALLEGRO_HAPTIC_DRIVER;
 
 
@@ -69,11 +69,11 @@ struct ALLEGRO_HAPTIC
 };
 
 /* Haptic diver list. */
-extern _AL_DRIVER_INFO _al_haptic_driver_list[];
+extern const _AL_DRIVER_INFO _al_haptic_driver_list[];
 
 /* Macros for constructing the driver list */
 #define _AL_BEGIN_HAPTIC_DRIVER_LIST                            \
-   _AL_DRIVER_INFO _al_haptic_driver_list[] =                  \
+   const _AL_DRIVER_INFO _al_haptic_driver_list[] =                  \
    {
 
 #define _AL_END_HAPTIC_DRIVER_LIST                              \
