@@ -369,6 +369,7 @@ static bool ahap_upload_effect(ALLEGRO_HAPTIC *dev,
    ALLEGRO_HAPTIC_EFFECT *effect, ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
    ALLEGRO_HAPTIC_ANDROID *ahap = ahap_from_al(dev);
+   ( void ) ahap;
    
    ASSERT(dev);
    ASSERT(id);
@@ -405,17 +406,20 @@ static bool ahap_upload_effect(ALLEGRO_HAPTIC *dev,
 
 static bool ahap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID *id, int loops)
 {
-   ALLEGRO_HAPTIC_ANDROID * ahap = (ALLEGRO_HAPTIC_ANDROID *)  id->_hap;
-   ALLEGRO_HAPTIC_EFEECT_ANDROID * aeff = (ALLEGRO_HAPTIC_ANDROID_EFFECT *)  id->_pointer;
+   ALLEGRO_HAPTIC_ANDROID * ahap = (ALLEGRO_HAPTIC_ANDROID *)  id->_haptic;
+   ALLEGRO_HAPTIC_EFFECT_ANDROID * aeff = 
+      (ALLEGRO_HAPTIC_EFFECT_ANDROID *)  id->_pointer;
    
-   int fd;
+
    double now;
    double duration;
+   JNIEnv * env         = _al_android_get_jnienv();
 
    if (!ahap)
       return false;
+  
    
-   _jni_callObjectMethodV(ahap->vibrator, "vibrate", "(J)V", aeff->duration);
+   _jni_callObjectMethodV(env, ahap->vibrator, "vibrate", "(J)V", aeff->length);
 
    now = al_get_time();
    duration = loops * id->_effect_duration;
@@ -430,9 +434,10 @@ static bool ahap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID *id, int loops)
 
 static bool ahap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   ALLEGRO_HAPTIC_ANDROID *ahap = (ALLEGRO_HAPTIC_LINUX *) id->_haptic;
+   ALLEGRO_HAPTIC_ANDROID *ahap = (ALLEGRO_HAPTIC_ANDROID *) id->_haptic;
+   JNIEnv * env         = _al_android_get_jnienv();
    
-   _jni_callObjectMethod(ahap->vibrator, "cancel", "()V");
+   _jni_callObjectMethod(env, ahap->vibrator, "cancel", "()V");
    id->_playing = false;
    return true;
 }
@@ -451,29 +456,38 @@ static bool ahap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID *id)
 
 static bool ahap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   ALLEGRO_HAPTIC_ANDROID *ahap = (ALLEGRO_HAPTIC_LINUX *)id->_haptic;
-
+   ALLEGRO_HAPTIC_ANDROID *ahap = (ALLEGRO_HAPTIC_ANDROID *)id->_haptic;
+   (void) ahap;
+   ALLEGRO_HAPTIC_EFFECT_ANDROID * aeff = 
+    (ALLEGRO_HAPTIC_EFFECT_ANDROID *)  id->_pointer;
    ahap_stop_effect(id); 
-   ahap_release_effect_android(ahap);
+   ahap_release_effect_android(aeff);
    return true;
 }
 
 
 static bool ahap_release(ALLEGRO_HAPTIC *haptic)
 {
+   int index;
    ALLEGRO_HAPTIC_ANDROID *ahap = ahap_from_al(haptic);
    ASSERT(haptic);
 
    if (!ahap->active)
       return false;
+   for (index = 0; index < HAPTIC_EFFECTS_MAX ; index++) {
+    ahap_release_effect_android(ahap_effects + index); 
+   }
+   
 
    ahap->active   = false;
    ahap->vibrator = NULL;
    return true;
 }
 
-
-#endif /* ALLEGRO_HAVE_LINUX_INPUT_H */
+static bool ahap_get_active(ALLEGRO_HAPTIC *haptic) {
+   ALLEGRO_HAPTIC_ANDROID *ahap = ahap_from_al(haptic);
+   return ahap->active;
+}
 
 
 /* vim: set sts=3 sw=3 et: */

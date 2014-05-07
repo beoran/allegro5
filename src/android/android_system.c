@@ -450,6 +450,20 @@ static ALLEGRO_JOYSTICK_DRIVER *android_get_joystick_driver(void)
    }
 }
 
+static ALLEGRO_JOYSTICK_DRIVER *android_get_haptic_driver(void)
+{
+   if (strstr(al_cstr(system_data.model), "OUYA")) {
+      ALLEGRO_DEBUG("Using Linux haptic driver");
+      return &_al_hapdrv_linux;
+   }
+   else {
+      ALLEGRO_DEBUG("Using Android haptic driver");
+      return &_al_hapdrv_android;
+   }
+}
+
+
+
 static int android_get_num_video_adapters(void)
 {
    return 1;

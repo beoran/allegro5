@@ -20,6 +20,8 @@
 
 ALLEGRO_DEBUG_CHANNEL("acodec")
 
+#undef ALLEGRO_CFG_ACODEC_TREMOR
+
 #if defined(ALLEGRO_CFG_ACODEC_TREMOR)
    #include <tremor/ivorbisfile.h>
    #define TREMOR 1
@@ -81,6 +83,7 @@ static void shutdown_dynlib(void)
 static bool init_dynlib(void)
 {
 #ifdef ALLEGRO_CFG_ACODEC_VORBISFILE_DLL
+#warning OK
    if (ov_dll) {
       return true;
    }
@@ -109,7 +112,8 @@ static bool init_dynlib(void)
          }                                                                    \
       } while(0)
 #else
-   #define INITSYM(x)   (lib.x = (x))
+#warning acodec statically linked
+   #define INITSYM(x)  (void)x, (lib.x = (x))
 #endif
 
    memset(&lib, 0, sizeof(lib));
