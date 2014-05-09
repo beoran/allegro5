@@ -45,7 +45,7 @@ static void test_haptic_joystick(ALLEGRO_JOYSTICK *joy)
       al_upload_haptic_effect(haptic, &effect, &id));
 
    log_printf("Playing effect: %d.\n",
-      al_play_haptic_effect(&id, 5));
+      al_play_haptic_effect(&id, 3));
 
    do {
       al_rest(0.1);
