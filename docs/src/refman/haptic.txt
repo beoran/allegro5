@@ -7,6 +7,11 @@ These functions are declared in the main Allegro header file:
  #include <allegro5/allegro.h>
 ~~~~
 
+Currently force feedback is fully supported on Linux and on Windows for 
+DirectInput compatible devices. There is also minimal support for
+Android. It is not yet supported on OSX, iOS, or on Windows for XInput 
+compatible devices.
+
 ## API: ALLEGRO_HAPTIC
 
 This is an abstract data type representing a haptic device that supports
