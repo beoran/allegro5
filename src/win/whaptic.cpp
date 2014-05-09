@@ -281,7 +281,7 @@ static ALLEGRO_HAPTIC_EFFECT_WINDOWS *whap_get_available_effect(
 /* Releases a windows haptics effect and unloads it from the device. */
 static bool whap_release_effect_windows(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff) {
    bool result = true;
-   if(!weff) return false; /* make it easy to handle alll cases later on.*/
+   if(!weff) return false; /* make it easy to handle all cases later on.*/
    if(!weff->active) return false; /* already not in use, bail out. */
 
    /* Unload the effect from the device. */
@@ -462,7 +462,7 @@ static bool whap_slevel2win(LONG*res, double level)
 {
    ASSERT(res);
 
-   if (level < 1.0 || level > 1.0)
+   if (level < -1.0 || level > 1.0)
       return false;
    *res = (LONG) (level * DI_FFNOMINALMAX);
    return true;
@@ -595,7 +595,7 @@ static bool whap_rumble2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff,
   weff->guid                        = &GUID_Sine;
   return whap_level2win(&weff->parameter.periodic.dwMagnitude, effect->data.rumble.strong_magnitude)
       && whap_phase2win(&weff->parameter.periodic.dwPhase    , 0)
-      && whap_time2win(&weff->parameter.periodic.dwPeriod    , 250000)
+      && whap_time2win(&weff->parameter.periodic.dwPeriod    , 0.01)
       && whap_slevel2win(&weff->parameter.periodic.lOffset   , 0);
 }
 
@@ -657,7 +657,6 @@ static bool whap_is_dinput_device_haptic(LPDIRECTINPUTDEVICE2 device) {
    DIDEVCAPS dicaps;
    /* Get capabilities. */
    ALLEGRO_DEBUG("IDirectInputDevice8_GetCapabilities on %p\n", device);
-   memset((void *) &dicaps, 0, sizeof(dicaps));
    dicaps.dwSize = sizeof (dicaps);
    ret = IDirectInputDevice8_GetCapabilities(device, &dicaps);
    if (FAILED(ret)) {
@@ -665,7 +664,7 @@ static bool whap_is_dinput_device_haptic(LPDIRECTINPUTDEVICE2 device) {
       return false;
    }
    /** Is it a haptic device? */
-   bool ishaptic = (dicaps.dwFlags & DIDC_FORCEFEEDBACK) == DIDC_FORCEFEEDBACK;
+   bool ishaptic = (dicaps.dwFlags & DIDC_FORCEFEEDBACK);
    ALLEGRO_DEBUG("dicaps.dwFlags: %lu, %d, %d\n", dicaps.dwFlags, DIDC_FORCEFEEDBACK, ishaptic);
    return (ishaptic);
 }
@@ -785,23 +784,20 @@ whap_check_effect_callback(LPCDIEFFECTINFO info, LPVOID data)
 
 /* Callback to check which axes are supported. */
 static BOOL CALLBACK
-whap_check_axes_calback(LPCDIDEVICEOBJECTINSTANCE dev, LPVOID data)
+whap_check_axes_callback(LPCDIDEVICEOBJECTINSTANCE dev, LPVOID data)
 {
    ALLEGRO_HAPTIC * haptic = (ALLEGRO_HAPTIC *) data;
    ALLEGRO_HAPTIC_WINDOWS * whap = whap_from_al(haptic);
 
-   whap->naxes = 0;
    if ((dev->dwType & DIDFT_AXIS) && (dev->dwFlags & DIDOI_FFACTUATOR)) {
+      whap->axes[whap->naxes] = dev->dwOfs;
+      whap->naxes++;
 
-        whap->axes[whap->naxes] = dev->dwOfs;
-        whap->naxes++;
-
-        /* Stop if the axes limit is reached */
-        if (whap->naxes >= HAPTICS_AXES_MAX) {
-            return DIENUM_STOP;
-        }
+      /* Stop if the axes limit is reached */
+      if (whap->naxes >= HAPTICS_AXES_MAX) {
+         return DIENUM_STOP;
+      }
     }
-
     return DIENUM_CONTINUE;
 }
 
@@ -810,13 +806,14 @@ whap_check_axes_calback(LPCDIDEVICEOBJECTINSTANCE dev, LPVOID data)
 static bool whap_initialize_dinput(ALLEGRO_HAPTIC_WINDOWS * whap) {
    HRESULT ret;
    ALLEGRO_HAPTIC * haptic = &whap->parent;
-
-   /* Get number of axes. */
+   /* Set number of axes to zero, and then ... */
+   whap->naxes = 0;
+   /* ... get number of axes. */
    ret = IDirectInputDevice8_EnumObjects(whap->device,
-                                          whap_check_axes_calback,
+                                          whap_check_axes_callback,
                                           haptic, DIDFT_AXIS);
    if (FAILED(ret)) {
-      ALLEGRO_WARN("Could not get haptic device axes ");
+      ALLEGRO_WARN("Could not get haptic device axes \n");
       return false;
    }
 
@@ -826,14 +823,14 @@ static bool whap_initialize_dinput(ALLEGRO_HAPTIC_WINDOWS * whap) {
     ret = IDirectInputDevice8_SendForceFeedbackCommand(whap->device,
                                                        DISFFC_RESET);
     if (FAILED(ret)) {
-        ALLEGRO_WARN("Could not reset haptic device");
+        ALLEGRO_WARN("Could not reset haptic device \n");
     }
 
     /* Enable all actuators. */
     ret = IDirectInputDevice8_SendForceFeedbackCommand(whap->device,
                                                        DISFFC_SETACTUATORSON);
     if (FAILED(ret)) {
-      ALLEGRO_WARN("Could not enable haptic device actuators ");
+      ALLEGRO_WARN("Could not enable haptic device actuators\n");
       return false;
     }
 
@@ -842,7 +839,7 @@ static bool whap_initialize_dinput(ALLEGRO_HAPTIC_WINDOWS * whap) {
                                           whap_check_effect_callback, haptic,
                                           DIEFT_ALL);
      if (FAILED(ret)) {
-      ALLEGRO_WARN("Could not get haptic device supported effects ");
+      ALLEGRO_WARN("Could not get haptic device supported effects\n");
       return false;
      }
 
@@ -1011,6 +1008,75 @@ static bool whap_is_effect_ok(ALLEGRO_HAPTIC *haptic,
 }
 
 
+struct dinput_error_pair {
+  HRESULT error;
+  const char * text;
+};
+
+#define DIMKEP(ERROR) {ERROR, #ERROR}
+
+struct dinput_error_pair dinput_errors[] = {
+  DIMKEP(DI_BUFFEROVERFLOW),
+  DIMKEP(DI_DOWNLOADSKIPPED),
+  DIMKEP(DI_EFFECTRESTARTED),
+  DIMKEP(DI_NOEFFECT),
+  DIMKEP(DI_NOTATTACHED),
+  DIMKEP(DI_OK),
+  DIMKEP(DI_POLLEDDEVICE),
+  DIMKEP(DI_PROPNOEFFECT),
+  DIMKEP(DI_SETTINGSNOTSAVED),
+  DIMKEP(DI_TRUNCATED),
+  DIMKEP(DI_TRUNCATEDANDRESTARTED),
+  DIMKEP(DI_WRITEPROTECT),
+  DIMKEP(DIERR_ACQUIRED),
+  DIMKEP(DIERR_ALREADYINITIALIZED),
+  DIMKEP(DIERR_BADDRIVERVER),
+  DIMKEP(DIERR_BETADIRECTINPUTVERSION),
+  DIMKEP(DIERR_DEVICEFULL),
+  DIMKEP(DIERR_DEVICENOTREG),
+  DIMKEP(DIERR_EFFECTPLAYING),
+  DIMKEP(DIERR_GENERIC),
+  DIMKEP(DIERR_HANDLEEXISTS),
+  DIMKEP(DIERR_HASEFFECTS),
+  DIMKEP(DIERR_INCOMPLETEEFFECT),
+  DIMKEP(DIERR_INPUTLOST),
+  DIMKEP(DIERR_INVALIDPARAM),
+  DIMKEP(DIERR_MAPFILEFAIL),
+  DIMKEP(DIERR_MOREDATA),
+  DIMKEP(DIERR_NOAGGREGATION),
+  DIMKEP(DIERR_NOINTERFACE),
+  DIMKEP(DIERR_NOTACQUIRED),
+  DIMKEP(DIERR_NOTBUFFERED),
+  DIMKEP(DIERR_NOTDOWNLOADED),
+  DIMKEP(DIERR_NOTEXCLUSIVEACQUIRED),
+  DIMKEP(DIERR_NOTFOUND),
+  DIMKEP(DIERR_NOTINITIALIZED),
+  DIMKEP(DIERR_OBJECTNOTFOUND),
+  DIMKEP(DIERR_OLDDIRECTINPUTVERSION),
+  DIMKEP(DIERR_OTHERAPPHASPRIO),
+  DIMKEP(DIERR_OUTOFMEMORY),
+  DIMKEP(DIERR_READONLY),
+  DIMKEP(DIERR_REPORTFULL),
+  DIMKEP(DIERR_UNPLUGGED),
+  DIMKEP(DIERR_UNSUPPORTED),
+  DIMKEP(E_HANDLE),
+  DIMKEP(E_PENDING),
+  DIMKEP(E_POINTER),
+  { 0, NULL } 
+};
+
+static void warn_on_error(HRESULT hr) {
+  struct dinput_error_pair * pair = dinput_errors;
+  while (pair->text) {
+    if (hr == pair->error) {
+      ALLEGRO_WARN("HRESULT error: %s\n", pair->text);
+    }
+    pair++;
+  }
+  ALLEGRO_WARN("Unknown HRESULT error: %u\n", (unsigned int)hr);
+}
+
+
 /*
 static double whap_effect_duration(ALLEGRO_HAPTIC_EFFECT *effect)
 {
@@ -1025,7 +1091,7 @@ static bool whap_upload_effect_helper
 {
    HRESULT ret;
    if (!whap_effect2win(weff, effect, whap)) {
-      ALLEGRO_WARN("Could not convert haptic effect.");
+      ALLEGRO_WARN("Could not convert haptic effect.\n");
       return false;
    }
 
@@ -1034,14 +1100,16 @@ static bool whap_upload_effect_helper
                                           &weff->effect,
                                           &weff->ref   , NULL);
    if (FAILED(ret)) {
-      ALLEGRO_WARN("Could not create haptic effect.");
+      ALLEGRO_WARN("Could not create haptic effect.\n");
+      warn_on_error(ret);
       return false;
    }
 
      /* Upload the effect to the device. */
    ret = IDirectInputEffect_Download(weff->ref);
    if (FAILED(ret)) {
-      ALLEGRO_WARN("Could not upload haptic effect.");
+      ALLEGRO_WARN("Could not upload haptic effect.\n");
+      warn_on_error(ret);
       return false;
    }
 
@@ -1065,6 +1133,8 @@ static bool whap_upload_effect(ALLEGRO_HAPTIC *dev,
    id->_pointer         = NULL;
    id->_playing         = false;
    id->_effect_duration = 0.0;
+   id->_start_time      = 0.0;
+   id->_end_time        = 0.0;
 
    al_lock_mutex(haptic_mutex);
 
@@ -1081,7 +1151,7 @@ static bool whap_upload_effect(ALLEGRO_HAPTIC *dev,
       id->_haptic  = dev;
       id->_pointer = weff;
       id->_id      = weff->id;
-      id->_effect_duration = al_get_haptic_effect_duration(effect);
+      id->_effect_duration = al_get_haptic_effect_duration(effect);      
    }
 
    al_unlock_mutex(haptic_mutex);
@@ -1094,25 +1164,23 @@ static bool whap_play_effect(ALLEGRO_HAPTIC_EFFECT_ID *id, int loops)
    HRESULT res;
    ALLEGRO_HAPTIC_WINDOWS *whap = (ALLEGRO_HAPTIC_WINDOWS *) id->_haptic;
    ALLEGRO_HAPTIC_EFFECT_WINDOWS *weff;
-   if (!whap)
+   if ((!whap) || (id->_id < 0))
       return false;
+   
    weff = whap->effects + id->_id;
 
+  /* IDirectInputEffect_SetParameters(weff->ref, weff->effect, weff-> flags); */
+  
    res = IDirectInputEffect_Start(weff->ref, loops, 0);
    if(FAILED(res)) {
       ALLEGRO_WARN("Failed to play an effect.");
       return false;
    }
    id->_playing = true;
-   // id->_
-
+   id->_start_time = al_get_time();
+   id->_end_time   = id->_start_time;
+   id->_end_time  += id->_effect_duration * (double)loops;
    return true;
-
-
-
-
-
-
 }
 
 
@@ -1122,8 +1190,9 @@ static bool whap_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
    ALLEGRO_HAPTIC_WINDOWS *whap = (ALLEGRO_HAPTIC_WINDOWS *) id->_haptic;
    ALLEGRO_HAPTIC_EFFECT_WINDOWS *weff;
 
-   if (!whap)
+   if ((!whap) || (id->_id < 0))
       return false;
+   
    weff = whap->effects + id->_id;
 
    res = IDirectInputEffect_Stop(weff->ref);
@@ -1142,20 +1211,36 @@ static bool whap_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
    ASSERT(id);
    HRESULT res;
-   DWORD flags;
+   DWORD flags = 0;
    ALLEGRO_HAPTIC_WINDOWS *whap = (ALLEGRO_HAPTIC_WINDOWS *) id->_haptic;
    ALLEGRO_HAPTIC_EFFECT_WINDOWS *weff;
 
-   if (!whap)
+   if ((!whap) || (id->_id < 0) || (!id->_playing))
       return false;
-   weff = whap->effects + id->_id;
 
+   weff = whap->effects + id->_id;
+    
    res = IDirectInputEffect_GetEffectStatus(weff->ref, &flags);
    if(FAILED(res)) {
       ALLEGRO_WARN("Failed to get the status of effect.");
-      return false;
-   }
-   return ((flags & DIEGES_PLAYING) == DIEGES_PLAYING);
+      /* If we get here, then use the play time in stead to 
+       * see if the effect should still be playing. 
+       * Do this because in case GeteffectStatus fails, we can't
+       * assume the sample isn't playing. In fact, if the play command 
+       * was sucessful, it should still be playing as long as the play 
+       * time has not passed. 
+       */
+      return (al_get_time() < id->_end_time);
+   }   
+   if (flags & DIEGES_PLAYING) return true;
+    /* WINE is bugged here, it doesn't set flags, but it also 
+    * just returns DI_OK. Thats why here, don't believe the API 
+    * when it the playing flag isn't set if the effect's duration
+    * has not passed. On real Windows it should probably always be the 
+    * case that the effect will have played completely when 
+    * the play time has ended.
+    */
+   return (al_get_time() < id->_end_time);
 }
 
 
@@ -1164,8 +1249,9 @@ static bool whap_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
    ALLEGRO_HAPTIC_WINDOWS *whap = (ALLEGRO_HAPTIC_WINDOWS *)id->_haptic;
    ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff;
-
-
+   if ((!whap) || (id->_id < 0))
+      return false;
+   
    whap_stop_effect(id);
 
    weff = whap->effects + id->_id;
