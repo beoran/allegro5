@@ -306,7 +306,13 @@ bool al_upload_and_play_haptic_effect(ALLEGRO_HAPTIC *hap,
 
    if (!al_upload_haptic_effect(hap, effect, id))
       return false;
-   return al_play_haptic_effect(id, loop);
+   /* If playing the effect failed, unload the haptic effect automatically 
+    */
+   if (!al_play_haptic_effect(id, loop)) {
+     al_release_haptic_effect(id);
+     return false;
+   }
+   return true;
 }
 
 
