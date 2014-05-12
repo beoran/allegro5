@@ -30,6 +30,10 @@
 #include "allegro5/internal/aintern_bitmap.h"
 
 
+#ifdef ALLEGRO_CFG_XINPUT
+/* Don't compile this lot if xinput isn't supported. */
+
+
 #ifndef ALLEGRO_WINDOWS
 #error something is wrong with the makefile
 #endif
@@ -536,3 +540,4 @@ static bool joyxi_get_active(ALLEGRO_JOYSTICK *joy) {
 }
 
 
+#endif /* #ifdef ALLEGRO_CFG_XINPUT */

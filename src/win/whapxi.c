@@ -15,7 +15,6 @@
  *      See LICENSE.txt for copyright information.
  */
 
-#ifdef _COMMENTED_OUT_FOR_NOW
 
 #define ALLEGRO_NO_COMPATIBILITY
 
@@ -32,6 +31,9 @@
 #include "allegro5/internal/aintern_joystick.h"
 #include "allegro5/internal/aintern_bitmap.h"
 
+#ifdef ALLEGRO_CFG_XINPUT
+/* Don't compile this lot if xinput isn't supported. */
+
 #ifndef ALLEGRO_WINDOWS
 #error something is wrong with the makefile
 #endif
@@ -45,10 +47,10 @@
 #include <mmsystem.h>
 #include <process.h>
 #include <math.h>
-#include <dinput.h>
+#include <xinput.h>
 /* #include <sys/time.h> */
 
-#include "allegro5/internal/aintern_wjoydxnu.h"
+#include "allegro5/internal/aintern_wjoyxi.h"
 
 ALLEGRO_DEBUG_CHANNEL("whaptic")
 
