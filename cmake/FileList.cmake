@@ -55,8 +55,10 @@ set(ALLEGRO_SRC_FILES
 set(ALLEGRO_SRC_WIN_FILES
     src/win/whaptic.c
     src/win/whaptic.cpp
+    src/win/whapxi.c
     src/win/wjoydrv.c
     src/win/wjoydxnu.cpp
+    src/win/wjoyxi.c
     src/win/wkeyboard.c
     src/win/wmcursor.c
     src/win/wmouse.c

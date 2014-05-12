@@ -306,6 +306,25 @@ static ALLEGRO_KEYBOARD_DRIVER *win_get_keyboard_driver(void)
 
 static ALLEGRO_JOYSTICK_DRIVER *win_get_joystick_driver(void)
 {
+  /* Check whether to use xinput. If not, use directinput. 
+   * First check system configuration. Use xinput only when requested. 
+   * Otherwise use directinput by default.
+   */
+  ALLEGRO_SYSTEM * sys       = al_get_system_driver();
+  ALLEGRO_CONFIG * sysconf   = sys->config;
+  if (sysconf) {
+    const char * driver = al_get_config_value(sysconf, "joystick", "driver");
+    if (driver) {
+         ALLEGRO_DEBUG("Configuration value graphics.driver = %s\n", driver);
+         if (0 == _al_stricmp(driver, "XINPUT")) {
+#ifdef ALLEGRO_CFG_XINPUT
+            return _al_joystick_driver_list[1].driver;
+#else            
+            ALLEGRO_WARN("XInput driver not supported.");
+#endif
+         }
+      }
+   }   
    return _al_joystick_driver_list[0].driver;
 }
 
