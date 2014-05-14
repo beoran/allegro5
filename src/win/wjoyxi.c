@@ -398,7 +398,7 @@ static bool joyxi_init_joystick(void)
 {
    int index;
    /* Create the mutex and a condition vaiable. */
-   joyxi_mutex = al_create_mutex();
+   joyxi_mutex = al_create_mutex_recursive();
    if(!joyxi_mutex) 
       return false;
    joyxi_cond = al_create_cond();

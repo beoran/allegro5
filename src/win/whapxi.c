@@ -51,7 +51,7 @@
 
 #include "allegro5/internal/aintern_wjoyxi.h"
 
-ALLEGRO_DEBUG_CHANNEL("hapxitic")
+ALLEGRO_DEBUG_CHANNEL("haptic")
 
 /* Support at most 4 haptic devices. */
 #define HAPTICS_MAX             4
@@ -154,23 +154,45 @@ ALLEGRO_HAPTIC_DRIVER _al_hapdrv_directx =
 
 
 static ALLEGRO_HAPTIC_XINPUT haptics[HAPTICS_MAX];
-static ALLEGRO_MUTEX *haptic_mutex = NULL;
+/* For the background thread */
+static ALLEGRO_THREAD * hapxi_thread = NULL;
+static ALLEGRO_MUTEX  * hapxi_mutex = NULL;
+/* Use acondition variable to put the thread to sleep and prevent too 
+ frequent polling*/
+static ALLEGRO_COND   * hapxi_cond = NULL;
 
 
+/* Initializes the XInput haptic system. */
 static bool hapxi_init_haptic(void)
 {
    int i;
-
-   ASSERT(haptic_mutex == NULL);
-   haptic_mutex = al_create_mutex();
-   if (!haptic_mutex)
+   
+   ASSERT(hapxi_mutex == NULL);
+   ASSERT(hapxi_thread == NULL);
+   ASSERT(hapxi_cond == NULL);
+   
+   
+   /* Create the mutex and a condition vaiable. */
+   hapxi_mutex = al_create_mutex_recursive();
+   if(!hapxi_mutex) 
       return false;
-
+   hapxi_cond = al_create_cond();
+   if(!hapxi_cond) 
+      return false;
+   
+   al_lock_mutex(hapxi_mutex);
+   
    for (i = 0; i < HAPTICS_MAX; i++) {
       haptics[i].active = false;
    }   
-
-   return true;
+   
+    /* Now start a polling background thread, since XInput is a polled API,
+     and also to make it possible for effects to stop running when their 
+     duration has passed. */ 
+    hapxi_thread = al_create_thread(hapxi_poll_thread, NULL);
+    al_unlock_mutex(joyxi_mutex);
+    if (hapxi_thread) al_start_thread(hapxi_thread);
+    return (hapxi_thread != NULL);
 }
 
 
