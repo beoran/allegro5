@@ -22,6 +22,12 @@ static void test_haptic_joystick(ALLEGRO_JOYSTICK *joy)
       al_get_joystick_name(joy));
 
    haptic = al_get_haptic_from_joystick(joy);
+
+   if(!haptic) {
+      log_printf("Could not initialize haptic device!\n");
+      return;
+   }
+
    log_printf("Can play back %d haptic effects.\n",
       al_get_num_haptic_effects(haptic));
 
