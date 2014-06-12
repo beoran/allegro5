@@ -318,6 +318,40 @@ static void whap_exit_haptic(void)
    haptic_mutex = NULL;
 }
 
+/* Convert the type of the periodic allegro effect to the windows effect*/
+static bool whap_periodictype2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff,
+                                  ALLEGRO_HAPTIC_EFFECT * effect)
+{
+   switch (effect->data.periodic.waveform) {
+      case ALLEGRO_HAPTIC_SINE:
+         weff->guid = &GUID_Sine;
+         return true;
+
+      case ALLEGRO_HAPTIC_SQUARE:
+         weff->guid = &GUID_Square;
+         return true;
+
+      case ALLEGRO_HAPTIC_TRIANGLE:
+         weff->guid = &GUID_Triangle;
+         return true;
+
+      case ALLEGRO_HAPTIC_SAW_UP:
+         weff->guid = &GUID_SawtoothUp;
+         return true;
+
+      case ALLEGRO_HAPTIC_SAW_DOWN:
+         weff->guid = &GUID_SawtoothDown;
+         return true;
+
+      case ALLEGRO_HAPTIC_CUSTOM:
+         weff->guid = &GUID_CustomForce;
+         return true;
+      default:
+         return false;
+   }
+}
+
+
 
 /* Convert the type of the allegro effect to the windows effect*/
 static bool whap_type2win(ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff,
@@ -1164,7 +1198,11 @@ static bool whap_upload_effect_helper
      ALLEGRO_HAPTIC_EFFECT_WINDOWS * weff, ALLEGRO_HAPTIC_EFFECT * effect)
 {
    HRESULT ret;
-   ALLEGRO_HAPTIC_EFFECT_WINDOWS weff2;
+   
+   if(!whap_effect2win(weff, effect, whap)) {
+      ALLEGRO_WARN("Could not convert haptic effect.\n");
+      return false;
+   }
 
    /* Create the effect. */
    ret = IDirectInputDevice8_CreateEffect(whap->device, (*weff->guid),
@@ -1176,7 +1214,7 @@ static bool whap_upload_effect_helper
     * The better way would be to fix this in that driver somehow.
     */
    if (!whap_acquire_lock(whap)) {
-      ALLEGRO_WARN("Could not lock haptic device \n");
+      ALLEGRO_WARN("Could not lock haptic device.\n");
       return false;
    }
 

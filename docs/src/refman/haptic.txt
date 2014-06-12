@@ -261,13 +261,31 @@ Since: 5.1.8
 
 Installs the haptic (force feedback) device subsystem. This must be called
 before using any other haptic-related functions. Returns true if the haptics
-subsystem could be initialized correctly, false if not.
+subsystem could be initialized correctly, false if not. 
+
+For portability you should first open a display before calling 
+[al_install_haptic]. On some platforms, such as DirectInput under 
+Windows, [al_install_haptic] will only work if at least one active 
+display is available. This display must stay available until
+[al_uninstall_haptic] is called.
+
+If you need to close and reopen your active display, e.g. then you should 
+call [al_uninstall_haptic] before closing the display, and 
+[al_install_haptic] after opening it again.
+
+on Windows 
+and DirectInput
 
 Since: 5.1.8
 
 ## API: al_uninstall_haptic
 
-Uninstalls the haptic device subsystem.
+Uninstalls the haptic device subsystem. This is useful since on some
+platforms haptic effects are bound to the active display.
+
+If you need to close and reopen your active display, e.g. then you should 
+call [al_uninstall_haptic] before closing the display, and 
+[al_install_haptic] after opening it again.
 
 Since: 5.1.8
 
