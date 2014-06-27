@@ -30,19 +30,9 @@
 
 #import <IOKit/hid/IOHIDBase.h>
 
-/* State transitions:
- *    unused -> born
- *    born -> alive
- *    born -> dying
- *    active -> dying
- *    dying -> unused
- */
-typedef enum {
-   JOY_STATE_UNUSED,
-   JOY_STATE_BORN,
-   JOY_STATE_ALIVE,
-   JOY_STATE_DYING
-} CONFIG_STATE;
+#include "allegro5/joystick.h"
+#include "allegro5/internal/aintern_joystick.h"
+#include "allegro5/internal/aintern_osxjoy.h"
 
 // These values can be found in the USB HID Usage Tables:
 // http://www.usb.org/developers/hidpage
@@ -50,20 +40,6 @@ typedef enum {
 #define JOYSTICK_USAGE_NUMBER      0x04
 #define GAMEPAD_USAGE_NUMBER       0x05
 
-typedef struct {
-   ALLEGRO_JOYSTICK parent;
-   int num_buttons;
-   int num_x_axes;
-   int num_y_axes;
-   int num_z_axes;
-   IOHIDElementRef buttons[_AL_MAX_JOYSTICK_BUTTONS];
-   IOHIDElementRef axes[_AL_MAX_JOYSTICK_STICKS][_AL_MAX_JOYSTICK_AXES];
-   long min[_AL_MAX_JOYSTICK_STICKS][_AL_MAX_JOYSTICK_AXES];
-   long max[_AL_MAX_JOYSTICK_STICKS][_AL_MAX_JOYSTICK_AXES];
-   CONFIG_STATE cfg_state;
-   ALLEGRO_JOYSTICK_STATE state;
-   IOHIDDeviceRef ident;
-} ALLEGRO_JOYSTICK_OSX;
 
 static IOHIDManagerRef hidManagerRef;
 static _AL_VECTOR joysticks;
@@ -296,6 +272,9 @@ static void device_add_callback(
       sprintf(buf, "Stick %d", i);
       joy->parent.info.stick[i].name = buf;
    }
+   
+   /* Fill in service for use by force feedback. */
+   joy->service = IOHIDDeviceGetService(joy->ref);
 
    al_unlock_mutex(add_mutex);
 
@@ -668,7 +647,7 @@ static bool reconfigure_joysticks(void)
                al_free(joy->parent.info.stick[i].axis[j].name);
             }
          }
-	 joy_null(joy);
+         joy_null(joy);
          joy->num_buttons =
          joy->num_x_axes =
          joy->num_y_axes =
@@ -686,11 +665,29 @@ static bool reconfigure_joysticks(void)
    return ret;
 }
 
-// FIXME!
+
 static const char *get_joystick_name(ALLEGRO_JOYSTICK *joy_)
 {  
    (void)joy_;
-   return "Joystick";
+   CFTypeRef tr = NULL;
+   
+   /* Get device name. this could arguably be cached. */
+   tr = IOHIDDeviceGetProperty(joy->ref, CFSTR(kIOHIDProductKey));
+   
+   if (!tr) {
+    /* Get the manufacturer if the name is unavailable. */
+      tr = IOHIDDeviceGetProperty(joy->ref, CFSTR(kIOHIDManufacturerKey));
+   }
+   
+   if (!tr) {
+      return "Joystick";
+   }
+   
+   if (!CFStringGetCString(tr, joy->name, sizeof(joy->name), kCFStringEncodingUTF8)) {
+      return "Joystick";
+   }
+   
+   return (const char *) self->name;  
 }
 
 static bool get_joystick_active(ALLEGRO_JOYSTICK *joy_)

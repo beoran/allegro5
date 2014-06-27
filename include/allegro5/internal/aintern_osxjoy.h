@@ -2,82 +2,52 @@
 #define __al_included_allegro_aintern_wjoydxnu_h
 
 
-/** Part of the Windows DirectInput joystick 
+/** Part of the new hidjoy joystick for OSX 
  * types are shared here for use by the haptic susbystem. */
 
-/* arbitrary limit to make life easier; this was the limit in Allegro 4.1.x */
-#define MAX_JOYSTICKS        8
-
-/* these limits are from DIJOYSTICK_STATE in dinput.h */
-#define MAX_SLIDERS          2
-#define MAX_POVS             4
-#define MAX_BUTTONS          32
-
-/* the number of joystick events that DirectInput is told to buffer */
-#define DEVICE_BUFFER_SIZE   10
-
-/* make sure all the constants add up */
-/* the first two sticks are (x,y,z) and (rx,ry,rz) */
-ALLEGRO_STATIC_ASSERT(wjoydxnu, _AL_MAX_JOYSTICK_STICKS >= (2 + MAX_SLIDERS + MAX_POVS));
-ALLEGRO_STATIC_ASSERT(wjoydxnu, _AL_MAX_JOYSTICK_BUTTONS >= MAX_BUTTONS);
-
-
-#define GUID_EQUAL(a, b)     (0 == memcmp(&(a), &(b), sizeof(GUID)))
-
-
+/* State transitions:
+ *    unused -> born
+ *    born -> alive
+ *    born -> dying
+ *    active -> dying
+ *    dying -> unused
+ */
 typedef enum {
-   STATE_UNUSED,
-   STATE_BORN,
-   STATE_ALIVE,
-   STATE_DYING
+   JOY_STATE_UNUSED,
+   JOY_STATE_BORN,
+   JOY_STATE_ALIVE,
+   JOY_STATE_DYING
 } CONFIG_STATE;
 
-#define ACTIVE_STATE(st) \
-   ((st) == STATE_ALIVE || (st) == STATE_DYING)
-
-
-/* helper structure to record information through object_enum_callback */
-#define NAME_LEN     128
+// These values can be found in the USB HID Usage Tables:
+// http://www.usb.org/developers/hidpage
+#define GENERIC_DESKTOP_USAGE_PAGE 0x01
+#define JOYSTICK_USAGE_NUMBER      0x04
+#define GAMEPAD_USAGE_NUMBER       0x05
+#define ALLEGRO_JOYSTICK_OSX_NAME_MAX 128;
 
 typedef struct {
-   bool have_x;      char name_x[NAME_LEN];
-   bool have_y;      char name_y[NAME_LEN];
-   bool have_z;      char name_z[NAME_LEN];
-   bool have_rx;     char name_rx[NAME_LEN];
-   bool have_ry;     char name_ry[NAME_LEN];
-   bool have_rz;     char name_rz[NAME_LEN];
-   int num_sliders;  char name_slider[MAX_SLIDERS][NAME_LEN];
-   int num_povs;     char name_pov[MAX_POVS][NAME_LEN];
-   int num_buttons;  char name_button[MAX_BUTTONS][NAME_LEN];
-} CAPS_AND_NAMES;
+   ALLEGRO_JOYSTICK parent;
+   int num_buttons;
+   int num_x_axes;
+   int num_y_axes;
+   int num_z_axes;
+   IOHIDElementRef buttons[_AL_MAX_JOYSTICK_BUTTONS];
+   IOHIDElementRef axes[_AL_MAX_JOYSTICK_STICKS][_AL_MAX_JOYSTICK_AXES];
+   long min[_AL_MAX_JOYSTICK_STICKS][_AL_MAX_JOYSTICK_AXES];
+   long max[_AL_MAX_JOYSTICK_STICKS][_AL_MAX_JOYSTICK_AXES];
+   CONFIG_STATE cfg_state;
+   ALLEGRO_JOYSTICK_STATE state;
+   IOHIDDeviceRef ident;
+   /* Name of the joystick */
+   char name[ALLEGRO_JOYSTICK_OSX_NAME_MAX];
+   /* For use by the haptic subsystem. */
+   io_service_t service; 
+} ALLEGRO_JOYSTICK_OSX;
 
 
-/* map a DirectInput axis to an Allegro (stick,axis) pair */
-typedef struct {
-   int stick, axis;
-} AXIS_MAPPING;
 
 
-typedef struct ALLEGRO_JOYSTICK_DIRECTX {
-   ALLEGRO_JOYSTICK parent;          /* must be first */
-   CONFIG_STATE config_state;
-   bool marked;
-   LPDIRECTINPUTDEVICE2 device;
-   GUID guid;
-   HANDLE waker_event;
-
-   ALLEGRO_JOYSTICK_STATE joystate;
-   AXIS_MAPPING x_mapping;
-   AXIS_MAPPING y_mapping;
-   AXIS_MAPPING z_mapping;
-   AXIS_MAPPING rx_mapping;
-   AXIS_MAPPING ry_mapping;
-   AXIS_MAPPING rz_mapping;
-   AXIS_MAPPING slider_mapping[MAX_SLIDERS];
-   int pov_mapping_stick[MAX_POVS];
-   char name[80];
-   char all_names[512]; /* button/stick/axis names with NUL terminators */
-} ALLEGRO_JOYSTICK_DIRECTX;
 
 #endif
 

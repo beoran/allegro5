@@ -293,6 +293,8 @@ static void add_device(io_object_t device)
       joy->num_axis_links = 2;
    }
    joy->interface = interface;
+   /* No OSX 10.6.x, no io_service_t, no force feedback. Sorry... */
+   joy->service = 0;   
    joystick_callback(joy,kIOReturnSuccess,NULL,queue);
    [elements release];
 }
