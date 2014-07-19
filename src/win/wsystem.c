@@ -304,32 +304,44 @@ static ALLEGRO_KEYBOARD_DRIVER *win_get_keyboard_driver(void)
    return _al_keyboard_driver_list[0].driver;
 }
 
+
+/* Checks whether xinput shoudlbe used or not not according
+ * to configuration.
+ * First check system configuration. Use xinput only when requested. 
+ * Otherwise use directinput by default.
+ */
+static bool win_use_xinput(void) {
+   const char * driver;
+   ALLEGRO_SYSTEM * sys       = al_get_system_driver();
+   ALLEGRO_CONFIG * sysconf   = sys->config;
+   if (!sysconf) return false;
+   driver = al_get_config_value(sysconf, "joystick", "driver");
+   if (!driver) return false;
+   ALLEGRO_DEBUG("Configuration value joystick.driver = %s\n", driver);
+   return (0 == _al_stricmp(driver, "XINPUT"));
+}
+
 static ALLEGRO_JOYSTICK_DRIVER *win_get_joystick_driver(void)
 {
-  /* Check whether to use xinput. If not, use directinput. 
-   * First check system configuration. Use xinput only when requested. 
-   * Otherwise use directinput by default.
-   */
-  ALLEGRO_SYSTEM * sys       = al_get_system_driver();
-  ALLEGRO_CONFIG * sysconf   = sys->config;
-  if (sysconf) {
-    const char * driver = al_get_config_value(sysconf, "joystick", "driver");
-    if (driver) {
-         ALLEGRO_DEBUG("Configuration value graphics.driver = %s\n", driver);
-         if (0 == _al_stricmp(driver, "XINPUT")) {
+  if (win_use_xinput()) {
 #ifdef ALLEGRO_CFG_XINPUT
-            return _al_joystick_driver_list[1].driver;
+      return _al_joystick_driver_list[1].driver;
 #else            
-            ALLEGRO_WARN("XInput driver not supported.");
+      ALLEGRO_WARN("XInput driver not supported.");
 #endif
-         }
-      }
    }   
    return _al_joystick_driver_list[0].driver;
 }
 
 static ALLEGRO_HAPTIC_DRIVER *win_get_haptic_driver(void)
 {
+   if (win_use_xinput()) {
+#ifdef ALLEGRO_CFG_XINPUT
+      return &_al_hapdrv_xinput;
+#else            
+      ALLEGRO_WARN("XInput driver not supported.");
+#endif
+   }   
    return &_al_hapdrv_directx;
    /* return _al_haptic_driver_list[0].driver; XXX: this list is empty for some reason!?  */
 }

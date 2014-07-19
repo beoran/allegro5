@@ -33,13 +33,16 @@
 #ifdef ALLEGRO_CFG_XINPUT
 /* Don't compile this lot if xinput isn't supported. */
 
-
 #ifndef ALLEGRO_WINDOWS
 #error something is wrong with the makefile
 #endif
 
 #ifdef ALLEGRO_MINGW32
    #undef MAKEFOURCC
+#endif
+
+#ifndef ALLEGRO_XINPUT_POLL_DELAY
+#define ALLEGRO_XINPUT_POLL_DELAY 0.01
 #endif
 
 #include <stdio.h>
@@ -102,7 +105,7 @@ static ALLEGRO_JOYSTICK_XINPUT joyxi_joysticks[MAX_JOYSTICKS];
 /* For the background thread */
 static ALLEGRO_THREAD * joyxi_thread = NULL;
 static ALLEGRO_MUTEX  * joyxi_mutex = NULL;
-/* Use acondition variable to put the thread to sleep and prevent too 
+/* Use acondition variable to put the thread to sleep and prevent too
  frequent polling*/
 static ALLEGRO_COND   * joyxi_cond = NULL;
 
@@ -132,20 +135,20 @@ static const int joyxi_axis_per_stick[MAX_STICKS] = {
 
 /* Struct to help mapping. */
 struct _AL_XINPUT_BUTTON_MAPPING {
-  int flags;  
-  int button;  
-  const char * name;  
+  int flags;
+  int button;
+  const char * name;
 };
 
-/* The data in this array helps to map from XINPUT button input to 
+/* The data in this array helps to map from XINPUT button input to
  ALLEGRO's. */
-static const struct _AL_XINPUT_BUTTON_MAPPING 
+static const struct _AL_XINPUT_BUTTON_MAPPING
   joyxi_button_mapping[MAX_BUTTONS] = {
   {XINPUT_GAMEPAD_A, 0, "A"},
   {XINPUT_GAMEPAD_B, 1, "B"},
-  {XINPUT_GAMEPAD_X, 2, "X"},  
+  {XINPUT_GAMEPAD_X, 2, "X"},
   {XINPUT_GAMEPAD_Y, 3, "Y"},
-  {XINPUT_GAMEPAD_RIGHT_SHOULDER, 4, "RIGHT SHOULDER"},  
+  {XINPUT_GAMEPAD_RIGHT_SHOULDER, 4, "RIGHT SHOULDER"},
   {XINPUT_GAMEPAD_LEFT_SHOULDER, 5, "LEFT SHOULDER"},
   {XINPUT_GAMEPAD_RIGHT_THUMB, 6, "RIGHT THUMB"},
   {XINPUT_GAMEPAD_LEFT_THUMB, 7, "LEFT THUMB"},
@@ -154,7 +157,7 @@ static const struct _AL_XINPUT_BUTTON_MAPPING
   {XINPUT_GAMEPAD_DPAD_RIGHT,10, "DPAD RIGHT"},
   {XINPUT_GAMEPAD_DPAD_LEFT, 11, "DPAD LEFT"},
   {XINPUT_GAMEPAD_DPAD_DOWN, 12, "DPAD DOWN"},
-  {XINPUT_GAMEPAD_DPAD_UP,   13, "DPAD UP"},  
+  {XINPUT_GAMEPAD_DPAD_UP,   13, "DPAD UP"},
 };
 
 /* generate_axis_event: [joystick thread]
@@ -220,25 +223,25 @@ static void joyxi_generate_button_event(ALLEGRO_JOYSTICK_XINPUT *joy, int button
 
 
 /* Converts an XINPUT axis value to one suitable for Allegro's axes.*/
-static float joyxi_convert_axis(SHORT value) 
+static float joyxi_convert_axis(SHORT value)
 {
    if (value >= 0) return (((float)value) / 32767.0);
    return (((float)value) / 32768.0);
 }
 
 /* Converts an XINPUT trigger value to one suitable for Allegro's axes.*/
-static float joyxi_convert_trigger(BYTE value) 
+static float joyxi_convert_trigger(BYTE value)
 {
    return (((float)value) / 255.0);
 }
 
 /* Converst an XInput state to an allegro joystick state. */
-static void joyxi_convert_state(ALLEGRO_JOYSTICK_STATE * alstate, XINPUT_STATE * xistate) 
+static void joyxi_convert_state(ALLEGRO_JOYSTICK_STATE * alstate, XINPUT_STATE * xistate)
 {
    int index;
    /* Wipe the allegro state clean. */
-   memset(alstate, 0, sizeof(*alstate)); 
-  
+   memset(alstate, 0, sizeof(*alstate));
+
   /* Map the buttons. Make good use of the mapping data. */
    for (index = 0; index < MAX_BUTTONS; index ++) {
       const struct _AL_XINPUT_BUTTON_MAPPING * mapping = joyxi_button_mapping+index;
@@ -256,14 +259,14 @@ static void joyxi_convert_state(ALLEGRO_JOYSTICK_STATE * alstate, XINPUT_STATE *
    /* Map the triggers as two individual sticks and axes each . */
    alstate->stick[2].axis[0] = joyxi_convert_trigger(xistate->Gamepad.bLeftTrigger);
    alstate->stick[3].axis[0] = joyxi_convert_trigger(xistate->Gamepad.bRightTrigger);
-   return;  
+   return;
 }
 
 
 /* Emits joystick events for the difference between the new and old joystick state. */
 static void joyxi_emit_events(
-   ALLEGRO_JOYSTICK_XINPUT * xjoy, 
-   ALLEGRO_JOYSTICK_STATE * newstate, ALLEGRO_JOYSTICK_STATE * oldstate) 
+   ALLEGRO_JOYSTICK_XINPUT * xjoy,
+   ALLEGRO_JOYSTICK_STATE * newstate, ALLEGRO_JOYSTICK_STATE * oldstate)
 {
    int index, subdex;
    /* Send events for buttons. */
@@ -271,8 +274,8 @@ static void joyxi_emit_events(
       int newbutton = newstate->button[index];
       int oldbutton = oldstate->button[index];
       if (newbutton != oldbutton) {
-        int type = (oldbutton > newbutton ? 
-                    ALLEGRO_EVENT_JOYSTICK_BUTTON_UP : 
+        int type = (oldbutton > newbutton ?
+                    ALLEGRO_EVENT_JOYSTICK_BUTTON_UP :
                     ALLEGRO_EVENT_JOYSTICK_BUTTON_DOWN);
         joyxi_generate_button_event(xjoy, index, type);
       }
@@ -285,31 +288,31 @@ static void joyxi_emit_events(
         if (oldaxis != newaxis) {
           joyxi_generate_axis_event(xjoy, index, subdex, newaxis);
         }
-      }     
+      }
    }
 }
 
 
 /* Polling function for a joystick that is currently active. */
-static void joyxi_poll_active_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy) 
-{  
+static void joyxi_poll_active_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
+{
    XINPUT_STATE           xistate;
    ALLEGRO_JOYSTICK_STATE alstate;
    DWORD res = XInputGetState(xjoy->index, &xistate);
    if (res != ERROR_SUCCESS) {
       /* Assume joystick was disconnected, need to reconfigure. */
       joyxi_generate_reconfigure_event();
-      return; 
+      return;
    }
-   
-   /* Check if the sequence is different. If not, no state change so 
+
+   /* Check if the sequence is different. If not, no state change so
      don't do anything. */
    if (xistate.dwPacketNumber == xjoy->state.dwPacketNumber)
       return;
    /* If we get here translate the state and send the needed events. */
    joyxi_convert_state(&alstate, &xistate);
    joyxi_emit_events(xjoy, &alstate, &xjoy->joystate);
-   
+
    /* Finally copy over the states. */
    xjoy->state    = xistate;
    xjoy->joystate = alstate;
@@ -317,20 +320,20 @@ static void joyxi_poll_active_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 
 
 /* Polling function for a joystick that is currently not active. */
-static void joyxi_poll_inactive_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy) 
-{  
+static void joyxi_poll_inactive_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
+{
    XINPUT_CAPABILITIES    xicapas;
    DWORD res = XInputGetCapabilities(xjoy->index, 0, &xicapas);
    if (res == ERROR_SUCCESS) {
       /* Got capabilities, joystick was connected, need to reconfigure. */
       joyxi_generate_reconfigure_event();
-      return; 
+      return;
    }
    /* Nothing to do if we get here. */
 }
 
 /* Polling function for a single joystick. */
-static void joyxi_poll_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy) 
+static void joyxi_poll_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 {
   if (xjoy->active) {
     joyxi_poll_active_joystick(xjoy);
@@ -340,7 +343,7 @@ static void joyxi_poll_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 }
 
 /** Polls all joysticks. */
-static void joyxi_poll_joysticks(void) 
+static void joyxi_poll_joysticks(void)
 {
   int index;
   for (index = 0; index < MAX_JOYSTICKS; index ++) {
@@ -349,21 +352,21 @@ static void joyxi_poll_joysticks(void)
 }
 
 /** Thread function that polls the xinput joysticks. */
-static void * joyxi_poll_thread(ALLEGRO_THREAD * thread, void * arg) 
-{  
+static void * joyxi_poll_thread(ALLEGRO_THREAD * thread, void * arg)
+{
   ALLEGRO_TIMEOUT timeout;
-  /* Poll once every 10 milliseconds. XXX/this should be configurable. */
-  al_init_timeout(&timeout, 0.01); 
+  /* Poll once every so much time, 10ms by default. */
+  al_init_timeout(&timeout, ALLEGRO_XINPUT_POLL_DELAY);
   while(!al_get_thread_should_stop(thread)) {
     al_lock_mutex(joyxi_mutex);
     /* Wait for the condition for the polling time in stead of using
-     al_rest in the hope that this uses less CPU, and also allows the 
+     al_rest in the hope that this uses less CPU, and also allows the
      polling thread to be awoken when needed. */
     al_wait_cond_until(joyxi_cond, joyxi_mutex, &timeout);
-    /* If we get here poll joystick for new input or connection 
+    /* If we get here poll joystick for new input or connection
      * and dispatch events. */
-    joyxi_poll_joysticks();    
-    al_unlock_mutex(joyxi_mutex); 
+    joyxi_poll_joysticks();
+    al_unlock_mutex(joyxi_mutex);
   }
   return arg;
 }
@@ -383,7 +386,7 @@ static void joyxi_init_joystick_info(ALLEGRO_JOYSTICK_XINPUT * xjoy) {
      info->button[index].name = joyxi_button_mapping[index].name;
   }
   /* Map stick and axis names. */
-  for(index = 0; index < MAX_STICKS; index++) {     
+  for(index = 0; index < MAX_STICKS; index++) {
      info->stick[index].name     = joyxi_stick_names[index];
      info->stick[index].num_axes = joyxi_axis_per_stick[index];
      info->stick[index].flags     = ALLEGRO_JOYFLAG_ANALOGUE;
@@ -394,30 +397,30 @@ static void joyxi_init_joystick_info(ALLEGRO_JOYSTICK_XINPUT * xjoy) {
 }
 
 /* Initialization API function. */
-static bool joyxi_init_joystick(void) 
+static bool joyxi_init_joystick(void)
 {
    int index;
    /* Create the mutex and a condition vaiable. */
    joyxi_mutex = al_create_mutex_recursive();
-   if(!joyxi_mutex) 
+   if(!joyxi_mutex)
       return false;
    joyxi_cond = al_create_cond();
-   if(!joyxi_cond) 
+   if(!joyxi_cond)
       return false;
-   
+
    al_lock_mutex(joyxi_mutex);
-   
-   /* Fill in the joystick structs */   
+
+   /* Fill in the joystick structs */
    for (index = 0; index < MAX_JOYSTICKS; index ++) {
      joyxi_joysticks[index].active = false;
-     sprintf(joyxi_joysticks[index].name, "XInput Joystick %d", index);    
+     sprintf(joyxi_joysticks[index].name, "XInput Joystick %d", index);
      joyxi_joysticks[index].index = (DWORD) index;
      joyxi_init_joystick_info(joyxi_joysticks+index);
    }
    /* Now, enable XInput*/
    XInputEnable(TRUE);
-   /* Now check which joysticks are enabled and poll them for the first time 
-    * but without sending any events. 
+   /* Now check which joysticks are enabled and poll them for the first time
+    * but without sending any events.
     */
    for (index = 0; index < MAX_JOYSTICKS; index ++) {
      DWORD res = XInputGetCapabilities(joyxi_joysticks[index].index, 0, &joyxi_joysticks[index].capabilities);
@@ -427,7 +430,7 @@ static bool joyxi_init_joystick(void)
        joyxi_joysticks[index].active = (res == ERROR_SUCCESS);
      }
    }
-  /* Now start a polling background thread, since XInput is a polled API.*/ 
+  /* Now start a polling background thread, since XInput is a polled API.*/
   joyxi_thread = al_create_thread(joyxi_poll_thread, NULL);
   al_unlock_mutex(joyxi_mutex);
   if (joyxi_thread) al_start_thread(joyxi_thread);
@@ -435,7 +438,7 @@ static bool joyxi_init_joystick(void)
 }
 
 
-static void joyxi_exit_joystick(void) 
+static void joyxi_exit_joystick(void)
 {
   int index;
   void * ret_value = NULL;
@@ -448,12 +451,12 @@ static void joyxi_exit_joystick(void)
   al_join_thread(joyxi_thread, &ret_value);
   /* clean it all up. */
   al_destroy_thread(joyxi_thread);
-  al_destroy_cond(joyxi_cond); 
-  
+  al_destroy_cond(joyxi_cond);
+
   al_lock_mutex(joyxi_mutex);
   /* Disable xinput */
   XInputEnable(FALSE);
-   /* Wipe the joystick structs */   
+   /* Wipe the joystick structs */
   for (index = 0; index < MAX_JOYSTICKS; index ++) {
      joyxi_joysticks[index].active = false;
   }
@@ -462,7 +465,7 @@ static void joyxi_exit_joystick(void)
 }
 
 
-static bool joyxi_reconfigure_joysticks(void) 
+static bool joyxi_reconfigure_joysticks(void)
 {
   int index;
   al_lock_mutex(joyxi_mutex);
@@ -480,26 +483,26 @@ static bool joyxi_reconfigure_joysticks(void)
   return true;
 }
 
-static int joyxi_get_num_joysticks(void) 
+static int joyxi_get_num_joysticks(void)
 {
   int result = 0, index;
   for (index = 0; index < MAX_JOYSTICKS; index ++) {
-    if (joyxi_joysticks[index].active) 
+    if (joyxi_joysticks[index].active)
       result++;
   }
   return result;
 }
 
-static ALLEGRO_JOYSTICK *joyxi_get_joystick(int num) 
+static ALLEGRO_JOYSTICK *joyxi_get_joystick(int num)
 {
   int al_number = 0, index;
-  /* Use a linear scan, so the first active joystick ends up as the first 
+  /* Use a linear scan, so the first active joystick ends up as the first
    * allegro joystick etc. */
   for (index = 0; index < MAX_JOYSTICKS; index ++) {
-    if (joyxi_joysticks[index].active) { 
-      if (num == al_number) 
+    if (joyxi_joysticks[index].active) {
+      if (num == al_number)
         return &joyxi_joysticks[index].parent;
-      else 
+      else
         al_number++;
     }
   }
@@ -507,21 +510,21 @@ static ALLEGRO_JOYSTICK *joyxi_get_joystick(int num)
 }
 
 
-static void joyxi_release_joystick(ALLEGRO_JOYSTICK *joy) 
+static void joyxi_release_joystick(ALLEGRO_JOYSTICK *joy)
 {
   /* No need to do anything. */
   (void) joy;
 }
 
-static void joyxi_get_joystick_state(ALLEGRO_JOYSTICK *joy, ALLEGRO_JOYSTICK_STATE *ret_state) 
+static void joyxi_get_joystick_state(ALLEGRO_JOYSTICK *joy, ALLEGRO_JOYSTICK_STATE *ret_state)
 {
   ALLEGRO_JOYSTICK_XINPUT * xjoy = (ALLEGRO_JOYSTICK_XINPUT*) joy;
   ASSERT(xjoy);
   ASSERT(ret_state);
-  /* Copy the data with the mutex 
+  /* Copy the data with the mutex
    * locked to prevent changes during copying. */
-  al_lock_mutex(joyxi_mutex);  
-  (*ret_state) =  xjoy->joystate;  
+  al_lock_mutex(joyxi_mutex);
+  (*ret_state) =  xjoy->joystate;
   al_unlock_mutex(joyxi_mutex);
 }
 
