@@ -191,6 +191,7 @@ struct ALLEGRO_HAPTIC_EFFECT_ID
    bool _playing;
    double _start_time;
    double _end_time;
+   void * driver;
 };
 
 

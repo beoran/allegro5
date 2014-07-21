@@ -53,9 +53,11 @@ set(ALLEGRO_SRC_FILES
     )
 
 set(ALLEGRO_SRC_WIN_FILES
+    src/win/whapall.c  
     src/win/whaptic.c
     src/win/whaptic.cpp
     src/win/whapxi.c
+    src/win/wjoyall.c
     src/win/wjoydrv.c
     src/win/wjoydxnu.cpp
     src/win/wjoyxi.c
