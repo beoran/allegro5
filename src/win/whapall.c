@@ -39,18 +39,6 @@
 
 ALLEGRO_DEBUG_CHANNEL("haptic")
 
-/* Support at most 4 + 32 = 36 haptic devices. */
-#define HAPTICS_MAX            36
-
-typedef struct ALLEGRO_HAPTIC_WINDOWS_ALL {
-  ALLEGRO_HAPTIC                parent;
-  bool                          active;
-  int                           index;
-  ALLEGRO_HAPTIC_DRIVER       * driver;
-  ALLEGRO_HAPTIC              * handle;  
-} ALLEGRO_HAPTIC_WINDOWS_ALL;
-
-
 /* forward declarations */
 static bool hapall_init_haptic(void);
 static void hapall_exit_haptic(void);
@@ -129,7 +117,6 @@ ALLEGRO_HAPTIC_DRIVER _al_hapdrv_windows_all =
 };
 
 
-static ALLEGRO_HAPTIC_WINDOWS_ALL haptics[HAPTICS_MAX];
 /* Mutex for thread protection. */
 static ALLEGRO_MUTEX  * hapall_mutex = NULL;
 
@@ -137,10 +124,8 @@ static ALLEGRO_MUTEX  * hapall_mutex = NULL;
 /* Initializes the combined haptic system. */
 static bool hapall_init_haptic(void)
 {
-   int i;
    bool xi_ok, di_ok;
    ASSERT(hapall_mutex == NULL);
-
 
    /* Create the mutex. */
    hapall_mutex = al_create_mutex_recursive();
@@ -149,22 +134,10 @@ static bool hapall_init_haptic(void)
 
    al_lock_mutex(hapall_mutex);
 
-   for(i = 0; i < HAPTICS_MAX; i++) {
-      haptics[i].active = false;
-      haptics[i].driver = NULL;
-      haptics[i].handle = NULL;
-   }
-   
    xi_ok = _al_hapdrv_xinput.init_haptic();
    di_ok = _al_hapdrv_directx.init_haptic();
    al_unlock_mutex(hapall_mutex);
    return xi_ok || di_ok; 
-}
-
-/* Converts a generic haptic device to a Windows-specific one. */
-static ALLEGRO_HAPTIC_WINDOWS_ALL * hapall_from_al(ALLEGRO_HAPTIC *hap)
-{
-  return (ALLEGRO_HAPTIC_WINDOWS_ALL *) hap;
 }
 
 static void hapall_exit_haptic(void)
@@ -176,8 +149,7 @@ static void hapall_exit_haptic(void)
 
 static bool hapall_get_active(ALLEGRO_HAPTIC *haptic)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL *hapall = hapall_from_al(haptic);
-   return hapall->driver->get_active(hapall->handle);
+   return haptic->driver->get_active(haptic);
 }
 
 
@@ -190,15 +162,10 @@ static bool hapall_is_mouse_haptic(ALLEGRO_MOUSE *mouse)
 
 static bool hapall_is_joystick_haptic(ALLEGRO_JOYSTICK *joy)
 {
-   ALLEGRO_JOYSTICK_WINDOWS_ALL *joyall = (ALLEGRO_JOYSTICK_WINDOWS_ALL *) joy;
-   if (!al_is_joystick_installed())
-      return false;
-   if (!al_get_joystick_active(joy))
-      return false;
-   if (joyall->driver == &_al_joydrv_xinput) {
-      _al_hapdrv_xinput.is_joystick_haptic(joyall->handle);
-   } else if (joyall->driver == &_al_joydrv_directx) {
-      _al_hapdrv_directx.is_joystick_haptic(joyall->handle);
+   if (joy->driver == &_al_joydrv_xinput) {
+      _al_hapdrv_xinput.is_joystick_haptic(joy);
+   } else if (joy->driver == &_al_joydrv_directx) {
+      _al_hapdrv_directx.is_joystick_haptic(joy);
    } 
    return false;
 }
@@ -234,33 +201,27 @@ static ALLEGRO_HAPTIC *hapall_get_from_mouse(ALLEGRO_MOUSE *mouse)
 
 static ALLEGRO_HAPTIC *hapall_get_from_joystick(ALLEGRO_JOYSTICK *joy)
 {
-   ALLEGRO_JOYSTICK_WINDOWS_ALL * joyall = (ALLEGRO_JOYSTICK_WINDOWS_ALL *) joy;
-   ALLEGRO_HAPTIC_WINDOWS_ALL   * hapall;
 
+   ALLEGRO_HAPTIC * haptic = NULL;
    if (!al_is_joystick_haptic(joy))
       return NULL;
 
    al_lock_mutex(hapall_mutex);
 
-   /* Index of haptic is same as that of joystick. */
-   hapall                = haptics + joyall->index;
-   hapall->index         = joyall->index;
- 
-   hapall->parent.device = joyall;
-   hapall->parent.from   = _AL_HAPTIC_FROM_JOYSTICK;
-   hapall->active        =  true;
-   if (joyall->driver == &_al_joydrv_xinput) {
-      hapall->driver = &_al_hapdrv_xinput;
-   } else if (joyall->driver == &_al_joydrv_directx) {
-      hapall->driver = &_al_hapdrv_directx;
-   } else {
-      al_unlock_mutex(hapall_mutex);
-      return false;
+   if (joy->driver == &_al_joydrv_xinput) {
+      haptic = _al_hapdrv_xinput.get_from_joystick(joy);
+      if (haptic) {
+         haptic->driver = &_al_hapdrv_xinput;
+      }
+   } else if (joy->driver == &_al_joydrv_directx) {
+      haptic = _al_hapdrv_directx.get_from_joystick(joy);
+      if (haptic) {
+         haptic->driver = &_al_hapdrv_directx;
+      }
    }
-   hapall->handle = hapall->driver->get_from_joystick(joyall->handle);
-
+   
    al_unlock_mutex(hapall_mutex);
-   return &hapall->parent;
+   return haptic;
 }
 
 
@@ -287,59 +248,51 @@ static ALLEGRO_HAPTIC *hapall_get_from_touch_input(ALLEGRO_TOUCH_INPUT *dev)
 
 static int hapall_get_capabilities(ALLEGRO_HAPTIC *dev)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL * hapall = hapall_from_al(dev);
-   return hapall->driver->get_capabilities(hapall->handle);
+   return dev->driver->get_capabilities(dev);
 }
 
 
 static double hapall_get_gain(ALLEGRO_HAPTIC *dev)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL * hapall = hapall_from_al(dev);
-   return hapall->driver->get_gain(hapall->handle);
+   return dev->driver->get_gain(dev);
 }
 
 
 static bool hapall_set_gain(ALLEGRO_HAPTIC *dev, double gain)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL * hapall = hapall_from_al(dev);
-   return hapall->driver->set_gain(hapall->handle, gain);
+   return dev->driver->set_gain(dev, gain);
 }
 
 
 double hapall_get_autocenter(ALLEGRO_HAPTIC * dev)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL * hapall = hapall_from_al(dev);
-   return hapall->driver->get_autocenter(hapall->handle);
+   return dev->driver->get_autocenter(dev);
 }
 
 static bool hapall_set_autocenter(ALLEGRO_HAPTIC *dev, double intensity)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL * hapall = hapall_from_al(dev);
-   return hapall->driver->set_autocenter(hapall->handle, intensity);
+   return dev->driver->set_autocenter(dev, intensity);
 }
 
 static int hapall_get_num_effects(ALLEGRO_HAPTIC *dev)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL * hapall = hapall_from_al(dev);
-   return hapall->driver->get_num_effects(hapall->handle);
+   return dev->driver->get_num_effects(dev);
 }
 
 
 static bool hapall_is_effect_ok(ALLEGRO_HAPTIC *dev,
                               ALLEGRO_HAPTIC_EFFECT *effect)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL * hapall = hapall_from_al(dev);
-   return hapall->driver->is_effect_ok(hapall->handle, effect);
+   return dev->driver->is_effect_ok(dev, effect);
 }
 
 
 static bool hapall_upload_effect(ALLEGRO_HAPTIC *dev,
    ALLEGRO_HAPTIC_EFFECT *effect, ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL * hapall = hapall_from_al(dev);
    /* store the driver we'll need it later. */
-   id->driver = hapall->driver;
-   return hapall->driver->upload_effect(hapall->handle, effect, id);
+   id->driver = dev->driver;
+   return dev->driver->upload_effect(dev, effect, id);
 }
 
 static bool hapall_play_effect(ALLEGRO_HAPTIC_EFFECT_ID *id, int loops)
@@ -375,8 +328,7 @@ static bool hapall_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 
 static bool hapall_release(ALLEGRO_HAPTIC *haptic)
 {
-   ALLEGRO_HAPTIC_WINDOWS_ALL *hapall = hapall_from_al(haptic);
-   return hapall->driver->release(hapall->handle);
+   return haptic->driver->release(haptic);
 }
 
 #endif

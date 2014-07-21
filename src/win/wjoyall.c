@@ -73,9 +73,6 @@ ALLEGRO_DEBUG_CHANNEL("wjoyall")
 #include "allegro5/internal/aintern_joystick.h"
 #include "allegro5/internal/aintern_wjoyall.h"
 
-/* 32 + 4 = 36 joysticks */
-#define MAX_JOYSTICKS 36
-
 /* forward declarations */
 static bool joyall_init_joystick(void);
 static void joyall_exit_joystick(void);
@@ -106,9 +103,6 @@ ALLEGRO_JOYSTICK_DRIVER _al_joydrv_windows_all =
    joyall_get_active
 };
 
-/* the joystick structures */
-static ALLEGRO_JOYSTICK_WINDOWS_ALL joyall_joysticks[MAX_JOYSTICKS];
-
 /* Mutex to protect state access. XXX is this needed? */
 static ALLEGRO_MUTEX  * joyall_mutex = NULL;
 
@@ -126,19 +120,13 @@ static void joyall_setup_joysticks(void) {
   
    for (index = 0; index < joyall_num_xinput; index ++) {
       ALLEGRO_JOYSTICK * joystick       = _al_joydrv_xinput.get_joystick(index);
-      joyall_joysticks[index].active    = true;
-      joyall_joysticks[index].handle    = joystick;
-      joyall_joysticks[index].driver    = &_al_joydrv_xinput;
-      joyall_joysticks[index].index     = index;
+      joystick->driver = &_al_joydrv_xinput;
    }
 
    stop = joyall_num_dinput + joyall_num_xinput; 
-   for (index = joyall_num_xinput; index < stop; index++) {
-      ALLEGRO_JOYSTICK * joystick       = _al_joydrv_xinput.get_joystick(index);
-      joyall_joysticks[index].active    = true;
-      joyall_joysticks[index].handle    = joystick;
-      joyall_joysticks[index].driver    = &_al_joydrv_xinput;
-      joyall_joysticks[index].index     = index;
+   for (index = 0; index < joyall_num_dinput; index++) {
+      ALLEGRO_JOYSTICK * joystick       = _al_joydrv_directx.get_joystick(index);
+      joystick->driver = &_al_joydrv_directx;
    }
 }
 
@@ -147,7 +135,6 @@ static void joyall_setup_joysticks(void) {
 static bool joyall_init_joystick(void)
 {
    bool ok_xi, ok_di;
-   int index;
    /* Create the mutex and a condition vaiable. */
    joyall_mutex = al_create_mutex_recursive();
    if(!joyall_mutex)
@@ -155,12 +142,6 @@ static bool joyall_init_joystick(void)
 
    al_lock_mutex(joyall_mutex);
 
-   /* Fill in the joystick structs */
-   for (index = 0; index < MAX_JOYSTICKS; index ++) {
-     joyall_joysticks[index].active  = false;
-     joyall_joysticks[index].driver  = NULL;
-     joyall_joysticks[index].handle  = NULL;
-   }
    ok_xi = _al_joydrv_xinput.init_joystick();
    ok_di = _al_joydrv_directx.init_joystick();
    joyall_setup_joysticks();
@@ -171,12 +152,7 @@ static bool joyall_init_joystick(void)
 
 static void joyall_exit_joystick(void)
 {
-   int index;
    al_lock_mutex(joyall_mutex);
-   /* Wipe the joystick structs */
-   for (index = 0; index < MAX_JOYSTICKS; index ++) {
-      joyall_joysticks[index].active = false;
-   }
    _al_joydrv_xinput.exit_joystick();
    _al_joydrv_directx.exit_joystick();
    al_unlock_mutex(joyall_mutex);
@@ -186,7 +162,6 @@ static void joyall_exit_joystick(void)
 static bool joyall_reconfigure_joysticks(void)
 {
    al_lock_mutex(joyall_mutex);
-
    _al_joydrv_xinput.reconfigure_joysticks();
    _al_joydrv_directx.reconfigure_joysticks();
    joyall_setup_joysticks();
@@ -204,45 +179,39 @@ static int joyall_get_num_joysticks(void)
 
 static ALLEGRO_JOYSTICK *joyall_get_joystick(int num)
 {
+   int num_xinput, num_dinput;
+   num_dinput = _al_joydrv_directx.num_joysticks();
+   num_xinput = _al_joydrv_xinput.num_joysticks();
    if (num < 0) return NULL;
-   if (num >= joyall_get_num_joysticks()) return NULL;
-   return joyall_joysticks[num].handle; 
-}
-
-/* Convert allegro joystick to locla driver joystick struct */
-static ALLEGRO_JOYSTICK_WINDOWS_ALL * joyall_joy2winall(ALLEGRO_JOYSTICK * joy)
-{
-   return (ALLEGRO_JOYSTICK_WINDOWS_ALL *) joy;
+   /* Shift the joystick number to fit the range ofeach of the subdrivers */ 
+   if (num < num_xinput) {
+      return _al_joydrv_xinput.get_joystick(num);
+   } else if (num < (num_xinput + num_dinput)) {
+      return _al_joydrv_directx.get_joystick(num - num_xinput);
+   }
+   return NULL; 
 }
 
 static void joyall_release_joystick(ALLEGRO_JOYSTICK *joy)
 {
-   ALLEGRO_JOYSTICK_WINDOWS_ALL * wjoyall = joyall_joy2winall(joy);
    /* Forward to the driver's function. Here it's OK to use joy
-    * and not wjoydev->handle since the get_joystick function returns a
+    * since the get_joystick function returns a
     * pointer to the real underlying driver-specific joystick data.
     */
-   wjoyall->driver->release_joystick(joy);
+   joy->driver->release_joystick(joy);
 }
 
 static void joyall_get_joystick_state(ALLEGRO_JOYSTICK *joy, ALLEGRO_JOYSTICK_STATE *ret_state)
 {
-   ALLEGRO_JOYSTICK_WINDOWS_ALL * wjoyall = joyall_joy2winall(joy);
-   /* Forward to the driver's function */
-   wjoyall->driver->get_joystick_state(joy, ret_state);
+   joy->driver->get_joystick_state(joy, ret_state);
 }
 
 static const char *joyall_get_name(ALLEGRO_JOYSTICK *joy) {
-   ALLEGRO_JOYSTICK_WINDOWS_ALL * wjoyall = joyall_joy2winall(joy);
-   /* Forward to the driver's function */
-   return wjoyall->driver->get_name(joy);
+   return joy->driver->get_name(joy);
 }
 
 static bool joyall_get_active(ALLEGRO_JOYSTICK *joy) {
-   ALLEGRO_JOYSTICK_WINDOWS_ALL * wjoyall = joyall_joy2winall(joy);
-   if (!wjoyall->active) return false;
-   /* Forward to the driver's function */
-   return wjoyall->driver->get_active(joy);
+   return joy->driver->get_active(joy);
 }
 
 

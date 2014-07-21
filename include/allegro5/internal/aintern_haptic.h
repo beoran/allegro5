@@ -59,13 +59,14 @@ enum ALLEGRO_HAPTIC_PARENT {
    _AL_HAPTIC_FROM_TOUCH_INPUT
 };
 
-
+/* haptic has a driver field for per-device drivers on some platforms. */
 struct ALLEGRO_HAPTIC
 {
    enum ALLEGRO_HAPTIC_PARENT from;
    void * device;
    double gain;
    double autocenter;
+   ALLEGRO_HAPTIC_DRIVER * driver;
 };
 
 /* Haptic diver list. */
