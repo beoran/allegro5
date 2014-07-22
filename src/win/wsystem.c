@@ -343,21 +343,24 @@ static bool win_use_directinput(void)
 static ALLEGRO_JOYSTICK_DRIVER *win_get_joystick_driver(void)
 {
    if (win_use_directinput()) {
+      ALLEGRO_DEBUG("Selected DirectInput joystick driver.\n");
       return &_al_joydrv_directx;
    }
    
   if (win_use_xinput()) {
 #ifdef ALLEGRO_CFG_XINPUT
+      ALLEGRO_DEBUG("Selected XInput joystick driver.\n");
       return &_al_joydrv_xinput;
 #else            
-      ALLEGRO_WARN("XInput driver not supported.");
+      ALLEGRO_WARN("XInput joystick driver not supported.\n");
 #endif
    }
 
 #ifdef ALLEGRO_CFG_XINPUT
+      ALLEGRO_DEBUG("Selected combined XInput/DirectInput joystick driver.\n");
       return &_al_joydrv_windows_all;
 #else
-      ALLEGRO_WARN("Combined XInput/DirectInput driver not supported.");
+      ALLEGRO_WARN("Combined XInput/DirectInput joystick driver not supported. Usign DirectInput in stead.\n");
       return &_al_joydrv_directx;
 #endif
 }
@@ -367,21 +370,24 @@ static ALLEGRO_JOYSTICK_DRIVER *win_get_joystick_driver(void)
 static ALLEGRO_HAPTIC_DRIVER *win_get_haptic_driver(void)
 {
    if (win_use_directinput()) {
+      ALLEGRO_DEBUG("Selected DirectInput haptic driver.\n");
       return &_al_hapdrv_directx;
    }
    
   if (win_use_xinput()) {
 #ifdef ALLEGRO_CFG_XINPUT
+      ALLEGRO_DEBUG("Selected XInput haptic driver.\n");
       return &_al_hapdrv_xinput;
 #else            
-      ALLEGRO_WARN("XInput driver not supported.");
+      ALLEGRO_WARN("XInput haptic driver not supported.\n");
 #endif
    }
 
 #ifdef ALLEGRO_CFG_XINPUT
+      ALLEGRO_DEBUG("Selected combined XInput/DirectInput haptic driver.\n");
       return &_al_hapdrv_windows_all;
 #else
-      ALLEGRO_WARN("Combined Xinput/Directinput driver not supported.");
+      ALLEGRO_WARN("Combined XInput/DirectInput haptic driver not supported. Using DirectInput in stead.\n");
       return &_al_hapdrv_directx;
 #endif
 }

@@ -52,6 +52,7 @@
 #include <mmsystem.h>
 #include <process.h>
 #include <math.h>
+#include "allegro5/internal/aintern_sal.h"
 #include <xinput.h>
 
 #include "allegro5/internal/aintern_wjoyxi.h"

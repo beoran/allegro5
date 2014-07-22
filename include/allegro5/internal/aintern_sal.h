@@ -7,7 +7,7 @@ the SAL annotation junk gets in the way, and the msys2 provided sal.h isn't
 eniugh to get rid of the annotations. Therefore we disable
 them by defining them here. */   
 
-#if defined __MINGW32__ 
+#if defined(__MINGW32__) || defined(__MINGW64__)
 	#define __deref_out
 	#define __deref_in
 	#define __out_opt
@@ -15,6 +15,7 @@ them by defining them here. */
 	#define __null
 	#define __in
 	#define __out
+	#define __reserved
 	#define __in_bcount(ignored)
 	#define __out_bcount(ignored)
 	#define __in_ecount(ignored)

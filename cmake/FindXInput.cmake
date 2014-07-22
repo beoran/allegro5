@@ -16,7 +16,7 @@ find_path(XINPUT_INCLUDE_DIR xinput.h
     )
 
 find_library(XINPUT_LIBRARY
-    NAMES xinput
+    NAMES XInput xinput
     HINTS "$ENV{DXSDK_DIR}/Lib/$ENV{PROCESSOR_ARCHITECTURE}"
     DOC "Windows XInput support library"
     )

@@ -41,15 +41,22 @@
    #undef MAKEFOURCC
 #endif
 
+/* Poll connected joysticks frequently and non-connected ones infrequently. */
 #ifndef ALLEGRO_XINPUT_POLL_DELAY
 #define ALLEGRO_XINPUT_POLL_DELAY 0.01
 #endif
+
+#ifndef ALLEGRO_XINPUT_DISCONNECTED_POLL_DELAY
+#define ALLEGRO_XINPUT_DISCONNECTED_POLL_DELAY 1.00
+#endif
+
 
 #include <stdio.h>
 #include <allegro5/joystick.h>
 #include <mmsystem.h>
 #include <process.h>
 /* #include <WinError.h> */
+#include "allegro5/internal/aintern_sal.h"
 #include <xinput.h>
 
 ALLEGRO_DEBUG_CHANNEL("xinput")
@@ -102,12 +109,15 @@ DWORD WINAPI XInputGetBatteryInformation(DWORD, BYTE, XINPUT_BATTERY_INFORMATION
 /* the joystick structures */
 static ALLEGRO_JOYSTICK_XINPUT joyxi_joysticks[MAX_JOYSTICKS];
 
-/* For the background thread */
+/* For the background threads. */
+static double 		       joyxi_last_disconnected_poll = 0.0;
 static ALLEGRO_THREAD * joyxi_thread = NULL;
+static ALLEGRO_THREAD * joyxi_disconnected_thread = NULL;
 static ALLEGRO_MUTEX  * joyxi_mutex = NULL;
-/* Use acondition variable to put the thread to sleep and prevent too
+/* Use condition variables to put the thread to sleep and prevent too
  frequent polling*/
 static ALLEGRO_COND   * joyxi_cond = NULL;
+static ALLEGRO_COND   * joyxi_disconnected_cond = NULL;
 
 /* Names for things in because XInput doesn't provide them. */
 
@@ -148,16 +158,16 @@ static const struct _AL_XINPUT_BUTTON_MAPPING
   {XINPUT_GAMEPAD_B, 1, "B"},
   {XINPUT_GAMEPAD_X, 2, "X"},
   {XINPUT_GAMEPAD_Y, 3, "Y"},
-  {XINPUT_GAMEPAD_RIGHT_SHOULDER, 4, "RIGHT SHOULDER"},
-  {XINPUT_GAMEPAD_LEFT_SHOULDER, 5, "LEFT SHOULDER"},
-  {XINPUT_GAMEPAD_RIGHT_THUMB, 6, "RIGHT THUMB"},
-  {XINPUT_GAMEPAD_LEFT_THUMB, 7, "LEFT THUMB"},
+  {XINPUT_GAMEPAD_RIGHT_SHOULDER, 4, "RB"},
+  {XINPUT_GAMEPAD_LEFT_SHOULDER, 5, "LB"},
+  {XINPUT_GAMEPAD_RIGHT_THUMB, 6, "RT"},
+  {XINPUT_GAMEPAD_LEFT_THUMB, 7, "LT"},
   {XINPUT_GAMEPAD_BACK,       8, "BACK"},
   {XINPUT_GAMEPAD_START,      9, "START"},
-  {XINPUT_GAMEPAD_DPAD_RIGHT,10, "DPAD RIGHT"},
-  {XINPUT_GAMEPAD_DPAD_LEFT, 11, "DPAD LEFT"},
-  {XINPUT_GAMEPAD_DPAD_DOWN, 12, "DPAD DOWN"},
-  {XINPUT_GAMEPAD_DPAD_UP,   13, "DPAD UP"},
+  {XINPUT_GAMEPAD_DPAD_RIGHT,10, "RIGHT DPAD"},
+  {XINPUT_GAMEPAD_DPAD_LEFT, 11, "LEFT DPAD"},
+  {XINPUT_GAMEPAD_DPAD_DOWN, 12, "DOWN DPAD"},
+  {XINPUT_GAMEPAD_DPAD_UP,   13, "UP DPAD"},
 };
 
 /* generate_axis_event: [joystick thread]
@@ -189,11 +199,12 @@ static void joyxi_generate_axis_event(ALLEGRO_JOYSTICK_XINPUT *joy, int stick, i
 
    event.joystick.type = ALLEGRO_EVENT_JOYSTICK_AXIS;
    event.joystick.timestamp = al_get_time();
-   event.joystick.id = (ALLEGRO_JOYSTICK *)joy;
+   event.joystick.id = (ALLEGRO_JOYSTICK *) &joy->parent;
    event.joystick.stick = stick;
    event.joystick.axis = axis;
    event.joystick.pos = pos;
    event.joystick.button = 0;
+   ALLEGRO_DEBUG("Generating an axis event on stick %d axis %d value %f:\n", stick, axis, pos);
 
    _al_event_source_emit_event(es, &event);
 }
@@ -217,6 +228,7 @@ static void joyxi_generate_button_event(ALLEGRO_JOYSTICK_XINPUT *joy, int button
    event.joystick.axis = 0;
    event.joystick.pos = 0.0;
    event.joystick.button = button;
+   ALLEGRO_DEBUG("Generating an button event on button %d type %d:\n", button, event_type);
 
    _al_event_source_emit_event(es, &event);
 }
@@ -235,7 +247,7 @@ static float joyxi_convert_trigger(BYTE value)
    return (((float)value) / 255.0);
 }
 
-/* Converst an XInput state to an allegro joystick state. */
+/* Converts an XInput state to an Allegro joystick state. */
 static void joyxi_convert_state(ALLEGRO_JOYSTICK_STATE * alstate, XINPUT_STATE * xistate)
 {
    int index;
@@ -252,10 +264,10 @@ static void joyxi_convert_state(ALLEGRO_JOYSTICK_STATE * alstate, XINPUT_STATE *
       }
    }
    /* Map the x and y axes of both sticks. */
-   alstate->stick[0].axis[0] = joyxi_convert_axis(xistate->Gamepad.sThumbLX);
-   alstate->stick[0].axis[1] = joyxi_convert_axis(xistate->Gamepad.sThumbLY);
-   alstate->stick[1].axis[0] = joyxi_convert_axis(xistate->Gamepad.sThumbRX);
-   alstate->stick[1].axis[1] = joyxi_convert_axis(xistate->Gamepad.sThumbLY);
+   alstate->stick[0].axis[0] =    joyxi_convert_axis(xistate->Gamepad.sThumbLX);
+   alstate->stick[0].axis[1] = - joyxi_convert_axis(xistate->Gamepad.sThumbLY);
+   alstate->stick[1].axis[0] =   joyxi_convert_axis(xistate->Gamepad.sThumbRX);
+   alstate->stick[1].axis[1] = - joyxi_convert_axis(xistate->Gamepad.sThumbRY);
    /* Map the triggers as two individual sticks and axes each . */
    alstate->stick[2].axis[0] = joyxi_convert_trigger(xistate->Gamepad.bLeftTrigger);
    alstate->stick[3].axis[0] = joyxi_convert_trigger(xistate->Gamepad.bRightTrigger);
@@ -308,7 +320,10 @@ static void joyxi_poll_active_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
    /* Check if the sequence is different. If not, no state change so
      don't do anything. */
    if (xistate.dwPacketNumber == xjoy->state.dwPacketNumber)
-      return;
+      return; 
+
+   ALLEGRO_DEBUG("XInput joystick state change detected.\n");
+
    /* If we get here translate the state and send the needed events. */
    joyxi_convert_state(&alstate, &xistate);
    joyxi_emit_events(xjoy, &alstate, &xjoy->joystate);
@@ -319,11 +334,22 @@ static void joyxi_poll_active_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 }
 
 
-/* Polling function for a joystick that is currently not active. */
+/* Polling function for a joystick that is currently not active.  Care is taken to do this infrequently so
+performance doesn't suffer too much. */
 static void joyxi_poll_inactive_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 {
    XINPUT_CAPABILITIES    xicapas;
-   DWORD res = XInputGetCapabilities(xjoy->index, 0, &xicapas);
+   DWORD res;
+   double now = al_get_time();
+   
+   /* If the lst poll mawn't longe nough ago do nothing;*/
+   if ((now - joyxi_last_disconnected_poll) < ALLEGRO_XINPUT_DISCONNECTED_POLL_DELAY) {
+      return;
+   } 
+   
+   joyxi_last_disconnected_poll = now; 
+
+   res = XInputGetCapabilities(xjoy->index, 0, &xicapas);
    if (res == ERROR_SUCCESS) {
       /* Got capabilities, joystick was connected, need to reconfigure. */
       joyxi_generate_reconfigure_event();
@@ -346,6 +372,7 @@ static void joyxi_poll_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 static void joyxi_poll_joysticks(void)
 {
   int index;
+
   for (index = 0; index < MAX_JOYSTICKS; index ++) {
     joyxi_poll_joystick(joyxi_joysticks + index);
   }
@@ -354,20 +381,20 @@ static void joyxi_poll_joysticks(void)
 /** Thread function that polls the xinput joysticks. */
 static void * joyxi_poll_thread(ALLEGRO_THREAD * thread, void * arg)
 {
-  ALLEGRO_TIMEOUT timeout;
-  /* Poll once every so much time, 10ms by default. */
-  al_init_timeout(&timeout, ALLEGRO_XINPUT_POLL_DELAY);
-  while(!al_get_thread_should_stop(thread)) {
-    al_lock_mutex(joyxi_mutex);
-    /* Wait for the condition for the polling time in stead of using
-     al_rest in the hope that this uses less CPU, and also allows the
-     polling thread to be awoken when needed. */
-    al_wait_cond_until(joyxi_cond, joyxi_mutex, &timeout);
-    /* If we get here poll joystick for new input or connection
-     * and dispatch events. */
-    joyxi_poll_joysticks();
-    al_unlock_mutex(joyxi_mutex);
+   ALLEGRO_TIMEOUT timeout;
+   al_lock_mutex(joyxi_mutex);
+   /* Poll once every so much time, 10ms by default. */
+   while(!al_get_thread_should_stop(thread)) {
+      al_init_timeout(&timeout, ALLEGRO_XINPUT_POLL_DELAY);
+      /* Wait for the condition for the polling time in stead of using
+      al_rest to allows the polling thread to be awoken when needed. */
+      al_wait_cond_until(joyxi_cond, joyxi_mutex, &timeout);
+      /* If we get here poll joystick for new input or connection
+       * and dispatch events. The mutexhas always been locked 
+       * so this should be OK. */
+      joyxi_poll_joysticks();
   }
+  al_unlock_mutex(joyxi_mutex);
   return arg;
 }
 
@@ -400,18 +427,22 @@ static void joyxi_init_joystick_info(ALLEGRO_JOYSTICK_XINPUT * xjoy) {
 static bool joyxi_init_joystick(void)
 {
    int index;
-   /* Create the mutex and a condition vaiable. */
+   /* Create the mutex and two condition variables. */
    joyxi_mutex = al_create_mutex_recursive();
    if(!joyxi_mutex)
       return false;
    joyxi_cond = al_create_cond();
    if(!joyxi_cond)
       return false;
+   joyxi_disconnected_cond = al_create_cond();
+   if(!joyxi_disconnected_cond)
+      return false;
+
 
    al_lock_mutex(joyxi_mutex);
 
    /* Fill in the joystick structs */
-   for (index = 0; index < MAX_JOYSTICKS; index ++) {
+   for(index = 0; index < MAX_JOYSTICKS; index ++) {
      joyxi_joysticks[index].active = false;
      sprintf(joyxi_joysticks[index].name, "XInput Joystick %d", index);
      joyxi_joysticks[index].index = (DWORD) index;
@@ -422,7 +453,7 @@ static bool joyxi_init_joystick(void)
    /* Now check which joysticks are enabled and poll them for the first time
     * but without sending any events.
     */
-   for (index = 0; index < MAX_JOYSTICKS; index ++) {
+   for(index = 0; index < MAX_JOYSTICKS; index ++) {
      DWORD res = XInputGetCapabilities(joyxi_joysticks[index].index, 0, &joyxi_joysticks[index].capabilities);
      joyxi_joysticks[index].active = (res == ERROR_SUCCESS);
      if (joyxi_joysticks[index].active) {
@@ -430,11 +461,20 @@ static bool joyxi_init_joystick(void)
        joyxi_joysticks[index].active = (res == ERROR_SUCCESS);
      }
    }
-  /* Now start a polling background thread, since XInput is a polled API.*/
+  /* Now start two polling background thread, since XInput is a polled API.
+   * The first thread will poll the active joysticks frequently, the second 
+   * thread will poll the inactive joysticks infrequently. 
+   * This is done like this to preserve performance.  
+   */
   joyxi_thread = al_create_thread(joyxi_poll_thread, NULL);
+  joyxi_disconnected_thread = al_create_thread(joyxi_poll_disconnected_thread, NULL);
+
   al_unlock_mutex(joyxi_mutex);
+
   if (joyxi_thread) al_start_thread(joyxi_thread);
-  return (joyxi_thread != NULL);
+  if (joyxi_disconnected_thread) al_start_thread(joyxi_disconnected_thread);
+
+  return (joyxi_thread != NULL) &&  (joyxi_disconnected_thread != NULL) ;    
 }
 
 
