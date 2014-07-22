@@ -56,7 +56,6 @@
 #include <mmsystem.h>
 #include <process.h>
 /* #include <WinError.h> */
-#include "allegro5/internal/aintern_sal.h"
 #include <xinput.h>
 
 ALLEGRO_DEBUG_CHANNEL("xinput")
@@ -110,7 +109,6 @@ DWORD WINAPI XInputGetBatteryInformation(DWORD, BYTE, XINPUT_BATTERY_INFORMATION
 static ALLEGRO_JOYSTICK_XINPUT joyxi_joysticks[MAX_JOYSTICKS];
 
 /* For the background threads. */
-static double 		       joyxi_last_disconnected_poll = 0.0;
 static ALLEGRO_THREAD * joyxi_thread = NULL;
 static ALLEGRO_THREAD * joyxi_disconnected_thread = NULL;
 static ALLEGRO_MUTEX  * joyxi_mutex = NULL;
@@ -306,7 +304,7 @@ static void joyxi_emit_events(
 
 
 /* Polling function for a joystick that is currently active. */
-static void joyxi_poll_active_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
+static void joyxi_poll_connected_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 {
    XINPUT_STATE           xistate;
    ALLEGRO_JOYSTICK_STATE alstate;
@@ -336,19 +334,10 @@ static void joyxi_poll_active_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 
 /* Polling function for a joystick that is currently not active.  Care is taken to do this infrequently so
 performance doesn't suffer too much. */
-static void joyxi_poll_inactive_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
+static void joyxi_poll_disconnected_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
 {
    XINPUT_CAPABILITIES    xicapas;
    DWORD res;
-   double now = al_get_time();
-   
-   /* If the lst poll mawn't longe nough ago do nothing;*/
-   if ((now - joyxi_last_disconnected_poll) < ALLEGRO_XINPUT_DISCONNECTED_POLL_DELAY) {
-      return;
-   } 
-   
-   joyxi_last_disconnected_poll = now; 
-
    res = XInputGetCapabilities(xjoy->index, 0, &xicapas);
    if (res == ERROR_SUCCESS) {
       /* Got capabilities, joystick was connected, need to reconfigure. */
@@ -358,27 +347,32 @@ static void joyxi_poll_inactive_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
    /* Nothing to do if we get here. */
 }
 
-/* Polling function for a single joystick. */
-static void joyxi_poll_joystick(ALLEGRO_JOYSTICK_XINPUT * xjoy)
+
+/** Polls all connected joysticks. */
+static void joyxi_poll_connected_joysticks(void)
 {
-  if (xjoy->active) {
-    joyxi_poll_active_joystick(xjoy);
-  } else {
-    joyxi_poll_inactive_joystick(xjoy);
-  }
+   int index;
+
+   for (index = 0; index < MAX_JOYSTICKS; index ++) {
+      if ((joyxi_joysticks+index)->active) {
+         joyxi_poll_connected_joystick(joyxi_joysticks + index);
+      }
+   }
 }
 
-/** Polls all joysticks. */
-static void joyxi_poll_joysticks(void)
+/** Polls all disconnected joysticks. */
+static void joyxi_poll_disconnected_joysticks(void)
 {
-  int index;
+   int index;
 
-  for (index = 0; index < MAX_JOYSTICKS; index ++) {
-    joyxi_poll_joystick(joyxi_joysticks + index);
-  }
+   for (index = 0; index < MAX_JOYSTICKS; index ++) {
+      if (!((joyxi_joysticks+index)->active)) {
+         joyxi_poll_disconnected_joystick(joyxi_joysticks + index);
+      }
+   }
 }
 
-/** Thread function that polls the xinput joysticks. */
+/** Thread function that polls the active xinput joysticks. */
 static void * joyxi_poll_thread(ALLEGRO_THREAD * thread, void * arg)
 {
    ALLEGRO_TIMEOUT timeout;
@@ -392,7 +386,27 @@ static void * joyxi_poll_thread(ALLEGRO_THREAD * thread, void * arg)
       /* If we get here poll joystick for new input or connection
        * and dispatch events. The mutexhas always been locked 
        * so this should be OK. */
-      joyxi_poll_joysticks();
+      joyxi_poll_connected_joysticks();
+  }
+  al_unlock_mutex(joyxi_mutex);
+  return arg;
+}
+
+/** Thread function that polls the disconnected joysticks. */
+static void * joyxi_poll_disconnected_thread(ALLEGRO_THREAD * thread, void * arg)
+{
+   ALLEGRO_TIMEOUT timeout;
+   al_lock_mutex(joyxi_mutex);
+   /* Poll once every so much time, 10ms by default. */
+   while(!al_get_thread_should_stop(thread)) {
+      al_init_timeout(&timeout, ALLEGRO_XINPUT_DISCONNECTED_POLL_DELAY);
+      /* Wait for the condition for the polling time in stead of using
+      al_rest to allows the polling thread to be awoken when needed. */
+      al_wait_cond_until(joyxi_cond, joyxi_mutex, &timeout);
+      /* If we get here poll joystick for new input or connection
+       * and dispatch events. The mutexhas always been locked 
+       * so this should be OK. */
+      joyxi_poll_disconnected_joysticks();
   }
   al_unlock_mutex(joyxi_mutex);
   return arg;
@@ -489,7 +503,13 @@ static void joyxi_exit_joystick(void)
   al_set_thread_should_stop(joyxi_thread);
   al_signal_cond(joyxi_cond);
   al_join_thread(joyxi_thread, &ret_value);
+  al_set_thread_should_stop(joyxi_disconnected_thread);
+  al_signal_cond(joyxi_disconnected_cond);
+  al_join_thread(joyxi_disconnected_thread, &ret_value);
+
   /* clean it all up. */
+  al_destroy_thread(joyxi_disconnected_thread);
+  al_destroy_cond(joyxi_disconnected_cond);
   al_destroy_thread(joyxi_thread);
   al_destroy_cond(joyxi_cond);
 
@@ -518,8 +538,10 @@ static bool joyxi_reconfigure_joysticks(void)
      }
    }
   al_unlock_mutex(joyxi_mutex);
-  /** Signal the condition so new events are sent immediately for the new joysticks. */
+  /** Signal the conditions so new events are sent immediately for the new joysticks. */
   al_signal_cond(joyxi_cond);
+  /** Signal the disconnected thread in case another joystick got connected. */  
+  al_signal_cond(joyxi_disconnected_cond);
   return true;
 }
 
