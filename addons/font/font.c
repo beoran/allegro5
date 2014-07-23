@@ -21,6 +21,7 @@
 #include "allegro5/internal/aintern_vector.h"
 
 #include "font.h"
+#include <ctype.h>
 
 ALLEGRO_DEBUG_CHANNEL("font")
 
@@ -261,6 +262,26 @@ static int color_get_font_ranges(ALLEGRO_FONT *font, int ranges_count,
    return i;
 }
 
+static bool color_get_glyph_dimensions(ALLEGRO_FONT const *f,
+   int codepoint, int *bbx, int *bby, int *bbw, int *bbh)
+{
+   int h = al_get_font_line_height(f);
+   ALLEGRO_BITMAP * glyph = _al_font_color_find_glyph(f, codepoint);
+   if(!glyph) return false;
+   if (bbx) *bbx = 0;
+   if (bby) *bby = 0;
+   if (bbw) *bbw = glyph ? al_get_bitmap_width(glyph) : 1;
+   if (bbh) *bbh = h;
+   return true;
+}
+
+static int color_get_glyph_kerning(ALLEGRO_FONT const *f,
+   int codepoint1, int codepoint2)
+{
+   (void) f; (void) codepoint1; (void) codepoint2;
+   /* Bitmap fonts don't use any kerning */
+   return 0;
+}
 
 /********
  * vtable declarations
@@ -277,6 +298,8 @@ ALLEGRO_FONT_VTABLE _al_font_vtable_color = {
     color_destroy,
     color_get_text_dimensions,
     color_get_font_ranges,
+    color_get_glyph_dimensions,
+    color_get_glyph_kerning
 };
 
 
@@ -420,6 +443,74 @@ uint32_t al_get_allegro_font_version(void)
    return ALLEGRO_VERSION_INT;
 }
 
+
+/* Helper function that gets a word, that is a non-blank sequence separated by
+ * blanks from an ALLEGRO_ustr starting at start using the passed in info for
+ * storage. */
+
+static const ALLEGRO_USTR *
+get_ustr_word(ALLEGRO_USTR *ustr, ALLEGRO_USTR_INFO *info, int start, int * end )
+{
+   int pos = start;
+   int ch;
+   while ((ch = (int) al_ustr_get_next(ustr, &pos)) > 0) {
+      if(isspace(ch)) break;      
+   }
+   *end = pos;
+   return al_ref_ustr(info, ustr, start, pos);
+}
+
+
+/* Function: al_draw_multiline_text
+ */
+int al_draw_multiline_ustr(const ALLEGRO_FONT *font,
+     ALLEGRO_COLOR color, float x, float y, float w, int flags,
+     ALLEGRO_USTR *ustr)
+{
+   int prev;
+   int stop;
+   ALLEGRO_USTR_INFO word_info, chomp_info;
+   const ALLEGRO_USTR * word;
+   bool end_eol, hard_break = false;
+   int start_x = x;
+   int line_w = 0;
+   int pos = 0;
+   int line_h = al_get_font_line_height(font);
+   int lines = 1;
+   int word_w;
+   int word_end;
+   int aid;
+   (void) flags;
+   stop = al_ustr_size(ustr);
+   while (pos < stop) {
+      word   = get_ustr_word(ustr, &word_info, pos, &word_end);
+      word_w = al_get_ustr_width(font, word);
+      aid    = al_ustr_length(word);
+      prev   = al_ustr_prev_get(word, &aid);
+      end_eol= (prev == '\n');
+      /* Chomp off newline if needed. */
+      if (end_eol) {
+         word = al_ref_ustr(&chomp_info, word, 0, aid);
+      }
+      
+      if ((w < (word_w + line_w)) || hard_break ) {
+         /* Line is full, skip to new line. */
+         y += line_h;
+         x = start_x;
+         lines++;
+         line_w = 0;
+      }
+      al_draw_ustr(font, color, x, y, 0, word);
+      line_w    += word_w;
+      x         += word_w;
+      pos        = word_end;
+      prev       = al_ustr_prev_get(word, &aid);
+      /* break the line next time round if this word ended with an eol. */
+      hard_break = end_eol;  
+   }
+   return lines;
+}
+ 
 
 /* vim: set sts=4 sw=4 et: */
 
