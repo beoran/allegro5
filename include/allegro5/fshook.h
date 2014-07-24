@@ -117,21 +117,33 @@ AL_FUNC(ALLEGRO_FILE *,       al_open_fs_entry,    (ALLEGRO_FS_ENTRY *e,
 
 /* Utility functions and callbacks for them. */
 
+/* Enum: ALLEGRO_FOR_EACH_FILE_FLAGS
+ */
+typedef enum ALLEGRO_FOR_EACH_FILE_FLAGS
+{
+   ALLEGRO_FOR_EACH_FILE_RECURSE       = 1 << 6,
+   ALLEGRO_FOR_EACH_FILE_DOTFILES      = 1 << 7,
+   ALLEGRO_FOR_EACH_FILE_SHORT_NAME    = 1 << 8,
+} ALLEGRO_FOR_EACH_FILE_FLAGS;
+
+
 /* Typedef: al_for_each_fs_entry_callback
  */
 typedef bool al_for_each_fs_entry_callback(ALLEGRO_FS_ENTRY *e, void *extra);
 
-AL_FUNC(bool,  al_for_each_fs_entry, (const char *path,
+AL_FUNC(bool,  al_for_each_fs_entry, (ALLEGRO_FS_ENTRY *dir,
                                      al_for_each_fs_entry_callback *callback,
+                                     int flags,
                                      void *extra));
 
-/* Typedef: al_for_each_filename_callback
+/* Typedef: al_for_each_file_callback
  */
-typedef bool al_for_each_filename_callback(const char * filename, void *extra);
+typedef bool al_for_each_file_callback(const char * filename, int mode, void *extra);
 
-AL_FUNC(bool,  al_for_each_filename, (const char *path,
-                                     al_for_each_filename_callback *callback,
-                                     void *extra));
+AL_FUNC(bool,  al_for_each_file, (const char *path,
+                                  al_for_each_file_callback *callback,
+                                  int flags,
+                                  void *extra));
 
 /* Thread-local state. */
 AL_FUNC(const ALLEGRO_FS_INTERFACE *, al_get_fs_interface, (void));

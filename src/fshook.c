@@ -239,53 +239,68 @@ ALLEGRO_FILE *al_open_fs_entry(ALLEGRO_FS_ENTRY *e, const char *mode)
 
 /* Function: al_for_each_fs_entry
  */
-bool al_for_each_fs_entry(const char *path,
+bool al_for_each_fs_entry(ALLEGRO_FS_ENTRY * dir,
                          al_for_each_fs_entry_callback *callback,
+                         int flags,
                          void *extra)
 {
-   ALLEGRO_FS_ENTRY * dir;
    ALLEGRO_FS_ENTRY * entry;
-   dir = al_create_fs_entry(path);
-   
-   if (!dir || !al_open_directory(dir)) {
-      al_set_errno(ENOENT);
+
+   if (!al_open_directory(dir)) {
       return false;
    }
-   
-   for (entry = al_read_directory(dir); entry; entry = al_read_directory(dir)) {
+      
+   entry = al_read_directory(dir);
+   while(entry) {
       bool proceed = callback(entry, extra);
+      if (!proceed) {
+         al_destroy_fs_entry(entry);
+         return false;
+      }
+      
+      if (al_get_fs_entry_mode(entry) & ALLEGRO_FILEMODE_ISDIR) {
+         if (flags & ALLEGRO_FOR_EACH_FILE_RECURSE) {
+            al_for_each_fs_entry(entry, callback, flags, extra);
+         }
+      }
       al_destroy_fs_entry(entry);
-      if (!proceed) break;
+      entry = al_read_directory(dir);
    }
    
-   al_destroy_fs_entry(dir);
    return true;
 }
 
-/* Function: al_for_each_filename
+typedef struct ALLEGRO_FOR_EACH_FILE_INFO {
+   al_for_each_file_callback * callback;
+   int flags;
+   void * old_extra;
+   const char * path;
+} ALLEGRO_FOR_EACH_FILE_INFO;
+
+
+static bool al_for_each_file_callback_wrapper(ALLEGRO_FS_ENTRY * e, void * extra) {
+   ALLEGRO_FOR_EACH_FILE_INFO * info = extra;
+   return info->callback(al_get_fs_entry_name(e), al_get_fs_entry_mode(e), info->old_extra);
+}
+
+/* Function: al_for_each_file
  */
-bool al_for_each_filename(const char *path,
-                          al_for_each_filename_callback *callback,
+bool al_for_each_file(const char *path,
+                          al_for_each_file_callback *callback,
+                          int flags,
                           void *extra)
 {
+   ALLEGRO_FOR_EACH_FILE_INFO info;
    ALLEGRO_FS_ENTRY * dir;
-   ALLEGRO_FS_ENTRY * entry;
-   dir = al_create_fs_entry(path);
-   
-   if (!dir || !al_open_directory(dir)) {
-      al_set_errno(ENOENT);
-      return false;
-   }
-   
-   for (entry = al_read_directory(dir); entry; entry = al_read_directory(dir)) {
-      const char * filename = al_get_fs_entry_name(entry);
-      bool proceed = callback(filename, extra);
-      al_destroy_fs_entry(entry);
-      if (!proceed) break; 
-   }
-   
+   bool result;
+   dir            = al_create_fs_entry(path);
+   info.callback  = callback;
+   info.old_extra = extra;
+   info.flags     = flags;
+   info.path      = path;
+   result = al_for_each_fs_entry(dir, al_for_each_file_callback_wrapper, flags, &info);
    al_destroy_fs_entry(dir);
-   return true;
+   return result;
 }
 
 
