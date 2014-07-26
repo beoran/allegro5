@@ -27,6 +27,29 @@ Filesystem modes/types
 * ALLEGRO_FILEMODE_ISFILE - Regular file
 * ALLEGRO_FILEMODE_ISDIR - Directory
 
+## API: ALLEGRO_FOR_EACH_FILE_FLAGS
+
+This enum contain flags that control the operation of [al_for_each_file]
+and [al_for_each_fs_entry]. 
+
+* ALLEGRO_FOR_EACH_FILE_RECURSE - Recurse into directories
+* ALLEGRO_FOR_EACH_FILE_BASENAME - Call the callback with the basename
+  of the file in stead of the full absolute path only for [al_for_each_file].  
+* ALLEGRO_FOR_EACH_FILE_FILTER - Filter out files that don't match one of
+  [ALLEGRO_FILE_MODE] flags which should e binary orred with this flag.
+
+## API: ALLEGRO_FOR_EACH_FILE_RESULTS
+
+Thi enum contails the list of values that [al_for_each_file]
+and [al_for_each_fs_entry] and their callback functions may return.
+ 
+* ALLEGRO_FOR_EACH_FILE_ERROR - An error occured, iteration was halted.
+  Use [al_get_errno] to get an error code that details the problem. The error
+  code can be one of +ENOMEM+, +ENOTDIR+ or +ENOENT+. 
+* ALLEGRO_FOR_EACH_FILE_STOP - Return this value from the callback to top
+  iteration without there being an error.
+* ALLEGRO_FOR_EACH_FILE_OK - Return this value to continue iterating.
+
 ## API: al_create_fs_entry
 
 Creates an [ALLEGRO_FS_ENTRY] object pointing to path on the filesystem.
@@ -210,57 +233,109 @@ Returns the handle on success, NULL on error.
 
 See also: [al_fopen]
 
-### API: al_for_each_fs_entry_callback
-
-To use al_for_each_fs_entry, you should create a function with the prototype of
-this function. When it returns true iteration will continue,
-when it returns false iteration will stop. Note that the +entry+ parameter
-will be destroyed automatically when the callback function returns,
-so if you want to keep it you will need to make a duplicate and store that
-somewhere.
-
-See also: [al_for_each_fs_entry]
-
 ### API: al_for_each_fs_entry
 
-This convenience function will open the +path+ as a directory, and then
-will call the callback function +callback+ once for every filesystem entry
-in that directory. The callback +callback+ must be of type
-[al_for_each_fs_entry_callback]. The +callback will be called with a pointer
-to an [ALLEGRO_FS_ENTRY] that matches one file in +path+, and the pointer
-passed in the +extra+ parameter.
+This convenience function looks up all entries under +dir+, and then
+will call the callback function +callback+ once iteratively for every filesystem
+entry in that directory. Note that the +.+ and +..+ directories will never show
+up, they are filtered away automatically.
 
-Returns true if sucessful, false if something went wrong in opening
-the directory. In that it will use [al_set_errno] to indicate the type error
-which occurred.
+The +callback+ will be called with a +entry+ pointing to an [ALLEGRO_FS_ENTRY]
+that matches one file under +dir+, and the pointer +extra+ as it was passed
+to [al_for_each_fs_entry]. This +extra+ parameter is useful for storing
+results or hooking your own extra behavior to [al_for_each_fs_entry]. 
 
-See also: [al_for_each_fs_entry_callback], [al_for_each_filename]
+When +callback+ returns +ALLEGRO_FOR_EACH_FILE_OK+ then iteration will contine
+with the next file system entry. However if +callback+ returns
++ALLEGRO_FOR_EACH_FILE_STOP+ or +ALLEGRO_FOR_EACH_FILE_ERROR+, then iteration
+will stop.
 
-### API: al_for_each_filename_callback
+Note that the +entry+ parameter of +callback+ will be destroyed automatically
+when +callback+ returns so if you want to keep it you will need to make
+a duplicate and store that somewhere yourself.
 
-To use al_for_each_filename, you should create a function with the prototype of
-this function. When it returns true iteration will continue,
-when it returns false iteration will stop. Note that the +filename+
-pointer will become invalid automatically when the callback function returns,
-so if you want to keep it you will need to make a duplicate and store that
-somewhere.
+The flags may be 0 or a combination of one or more [ALLEGRO_FOR_EACH_FILE_FLAGS]
+and [ALLEGRO_FILE_MODE] binary OR'd together.
+
+If the flags have +ALLEGRO_FOR_EACH_FILE_RECURSE+ set then
+[al_for_each_fs_entry]  will recurse into all directories it finds
+in +dir+ and sub direcories of it.
+
+The flag +ALLEGRO_FOR_EACH_FILE_BASENAME+ has no effect for
+[al_for_each_fs_entry], it's for use by [al_for_each_file].
+
+If the flag ALLEGRO_FOR_EACH_FILE_FILTER is set, then you should binary OR it
+with one or more [ALLEGRO_FILE_MODE] flags. Filesystem entries of which the
+[al_get_fs_entry_mode] doesn't match the [ALLEGRO_FILE_MODE] flags ORrred into
++flags+ will be filtered out in that +callback+ will not be called for them.
+However, this has no effect on recursive iteration which will visit even
+directories that are being filtered out.
+ 
+This function returns +ALLEGRO_FOR_EACH_FILE_OK+ if it sucessfully
+iterated over all requested entries of +dir+. It returns
++ALLEGRO_FOR_EACH_FILE_STOP+ if the +callback+ requested to stop iteration
+by returning this value. If something went wrong along the way
++ALLEGRO_FOR_EACH_FILE_ERROR+ will be returned and [al_get_errno] will return
+one of ENOMEM, ENOENT or ENOTDIR to indicate more in detail what went wrong.
 
 See also: [al_for_each_filename]
 
-### API: al_for_each_filename
+### API: al_for_each_file
 
-This convenience function will open the +path+ as a directory, and then
-will call the callback function +callback+ once for every filesystem entry
-in that directory. The callback +callback+ must be of type
-[al_for_each_fs_entry_callback]. The +callback will be called with a char *
-pointer that points to a file name of one file in +path+, and the pointer
-passed in the +extra+ parameter.
+AL_FUNC(bool,  al_for_each_file, (
+         const char *path,
+         bool (*callback)(const char * filename, int mode, void *extra),
+         int flags,
+         void *extra));
 
-Returns true if sucessful, false if something went wrong in opening
-the directory. In that it will use [al_set_errno] to indicate the type error
-which occurred.
 
-See also: [al_for_each_fs_entry], [al_for_each_filename_callback]
+This convenience function looks up all entries under the directory +dir+, and
+then will call the callback function +callback+ once iteratively for every
+filesystem entry in that directory. Note that the +.+ and +..+ directories will
+never show up, they are filtered away automatically.
+
+The +callback+ will be called with a +filename+ pointing to an
+string with the filename that matches one file under +dir+. The +callback+ a
+also receives a +mode+ parammeter which is the [al_get_fs_entry_name] of the
+corresponding file, and  the pointer +extra+ as it was passed
+to [al_for_each_fs_entry]. This +extra+ parameter is useful for storing
+results or hooking your own extra behavior to [al_for_each_fs_entry].
+
+When +callback+ returns +ALLEGRO_FOR_EACH_FILE_OK+ then iteration will contine
+with the next file system entry. However if +callback+ returns
++ALLEGRO_FOR_EACH_FILE_STOP+ or +ALLEGRO_FOR_EACH_FILE_ERROR+, then iteration
+will stop.
+
+Note that the +filename+ parameter of +callback+ will be destroyed automatically
+when +callback+ returns so if you want to keep it you will need to make a
+duplicate and store that somewhere yourself.
+
+The flags may be 0 or a combination of one or more [ALLEGRO_FOR_EACH_FILE_FLAGS]
+and [ALLEGRO_FILE_MODE] binary OR'd together.
+
+If the flags have +ALLEGRO_FOR_EACH_FILE_RECURSE+ set then
+[al_for_each_file]  will recurse into all directories it finds
+in +dir+ and sub direcories of it.
+
+If the flag +ALLEGRO_FOR_EACH_FILE_BASENAME+ is set, then filename will contain
+the basename of the file name, that is, the file name without the full
+directory.
+
+If the flag ALLEGRO_FOR_EACH_FILE_FILTER is set, then you should binary OR it
+with one or more [ALLEGRO_FILE_MODE] flags. Files of which the +mode+ doesn't
+match the [ALLEGRO_FILE_MODE] flags ORrred into +flags+ will be filtered out in
+that +callback+ will not be called for them. However, this has no effect on
+recursive iteration which will visit even directories that are being filtered
+out.
+ 
+This function returns +ALLEGRO_FOR_EACH_FILE_OK+ if it sucessfully
+iterated over all requested entries of +dir+. It returns
++ALLEGRO_FOR_EACH_FILE_STOP+ if the +callback+ requested to stop iteration
+by returning this value. If something went wrong along the way
++ALLEGRO_FOR_EACH_FILE_ERROR+ will be returned and [al_get_errno] will return
+one of ENOMEM, ENOENT or ENOTDIR to indicate more in detail what went wrong.
+
+See also: [al_for_each_fs_entry]
 
 ## Alternative filesystem functions
 

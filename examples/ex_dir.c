@@ -62,7 +62,12 @@ static bool print_directory_callback(const char * filename, int mode, void * ext
 static void print_directory(char * dirname)
 {
    log_printf("\n------------------------------------\nExample of al_for_each_filename:\n\n");   
-   al_for_each_file(dirname, print_directory_callback,  ALLEGRO_FOR_EACH_FILE_RECURSE,  (void*) dirname);
+   al_for_each_file(dirname, print_directory_callback,
+   ALLEGRO_FOR_EACH_FILE_SHORT_NAME |
+   ALLEGRO_FILEMODE_ISFILE |
+   ALLEGRO_FOR_EACH_FILE_FILTER |
+   ALLEGRO_FOR_EACH_FILE_RECURSE,
+   (void*) dirname);
 }
 
 
