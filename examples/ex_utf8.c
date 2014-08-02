@@ -1,7 +1,7 @@
 /*
- *	Example program for the Allegro library.
+ * Example program for the Allegro library.
  *
- *	Test UTF-8 string routines.
+ * Test UTF-8 string routines.
  */
 
 /* TODO: we should also be checking on inputs with surrogate characters
@@ -1192,6 +1192,66 @@ static void t51(void)
    CHECK(0 == memcmp(str, "Al", 3));
 }
 
+/* test al_ustr_fnmatch */
+static void t52(void)
+{
+   const ALLEGRO_USTR *path, *glob;
+   ALLEGRO_USTR_INFO pi, gi;
+
+   glob = al_ref_cstr(&gi, "foo");
+   path = al_ref_cstr(&pi, "foo");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 == al_ustr_fnmatch(glob, path, 0));
+
+   glob = al_ref_cstr(&gi, "foo");
+   path = al_ref_cstr(&pi, "for");
+   CHECK(0 != al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 != al_ustr_fnmatch(glob, path, 0));
+
+   glob = al_ref_cstr(&gi, "foobar baz");
+   path = al_ref_cstr(&pi, "fOOBaR baz");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 != al_ustr_fnmatch(glob, path, 0));
+
+   glob = al_ref_cstr(&gi, "*");
+   path = al_ref_cstr(&pi, "fOOBaR");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 == al_ustr_fnmatch(glob, path, 0));
+
+   glob = al_ref_cstr(&gi, "********************");
+   path = al_ref_cstr(&pi, "fOOBaR");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 == al_ustr_fnmatch(glob, path, 0));
+
+   glob = al_ref_cstr(&gi, "foo*");
+   path = al_ref_cstr(&pi, "fOOBaR");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 != al_ustr_fnmatch(glob, path, 0));
+
+   glob = al_ref_cstr(&gi, "*bar");
+   path = al_ref_cstr(&pi, "fOOBaR");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 == al_ustr_fnmatch(glob, path, 0));
+
+   glob = al_ref_cstr(&gi, "*.png");
+   path = al_ref_cstr(&pi, "foo.pNg");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 != al_ustr_fnmatch(glob, path, 0));
+
+   glob = al_ref_cstr(&gi, "*.png*");
+   path = al_ref_cstr(&pi, "foo.pNgbar");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 != al_ustr_fnmatch(glob, path, 0));
+   
+   glob = al_ref_cstr(&gi, "data/*/*.png");
+   path = al_ref_cstr(&pi, "data/image/foo.PNG");
+   CHECK(0 == al_ustr_fnmatch(glob, path, ALLEGRO_USTR_FNMATCH_CASEFOLD));
+   CHECK(0 != al_ustr_fnmatch(glob, path, 0));
+   
+}
+
+
+
 /*---------------------------------------------------------------------------*/
 
 const test_t all_tests[] =
@@ -1201,7 +1261,7 @@ const test_t all_tests[] =
    t20, t21, t22, t23, t24, t25, t26, t27, t28, t29,
    t30, t31, t32, t33, t34, t35, t36, t37, t38, t39,
    t40, t41, t42, t43, t44, t45, t46, t47, t48, t49,
-   t50, t51
+   t50, t51, t52
 };
 
 #define NUM_TESTS (int)(sizeof(all_tests) / sizeof(all_tests[0]))

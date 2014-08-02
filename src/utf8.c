@@ -1156,5 +1156,82 @@ size_t al_ustr_encode_utf16(const ALLEGRO_USTR *us, uint16_t *s,
    return i * 2;
 }
 
+/* Helper function for case folding on al_ustr_fnmatch. */
+static int32_t al_ustr_char_foldcase(int32_t ch, int flags) {
+   if (flags & ALLEGRO_USTR_FNMATCH_CASEFOLD && isupper(ch)) {
+      return tolower(ch);
+   }
+   return ch;
+}
+
+/* Function: al_ustr_fnmatch
+ */
+int al_ustr_fnmatch(const ALLEGRO_USTR * glob, const ALLEGRO_USTR * path, int flags)
+{
+   int glob_pos = 0;
+   int path_pos = 0;
+   int32_t glob_char, path_char;
+
+   glob_char = al_ustr_get_next(glob, &glob_pos);
+   path_char = al_ustr_get_next(path, &path_pos);
+   while (path_char >= 0) {
+      
+      if (glob_char < 0)  {
+         return ALLEGRO_USTR_FNMATCH_NOMATCH;
+      }
+
+      /* Skip any ** or ***, etc */
+      if (glob_char == '*') {
+         glob_char = al_ustr_get_next(glob, &glob_pos);
+         while (glob_char == '*') {
+            glob_char = al_ustr_get_next(glob, &glob_pos);
+         }
+         /* Back up to get the last * */
+         do {
+            glob_char = al_ustr_prev_get(glob, &glob_pos);
+         } while (glob_char != '*');
+      } 
+
+      if (glob_char == '?') {
+         /* Question mark matches any character
+          * except . and /. Move glob  and path to next character. */
+         if (path_char != '.' && path_char != '/') { 
+            glob_char = al_ustr_get_next(glob, &glob_pos);
+            path_char = al_ustr_get_next(path, &path_pos);
+         } else { /* Done with the wildcards and go to the next non wildcard
+                  glob character */
+            while (glob_char == '?' || glob_char == '*') {
+               glob_char = al_ustr_get_next(glob, &glob_pos);
+            }  
+         }
+      } else if (glob_char == '*') {
+         if  (path_char != '.' && path_char != '/') { 
+            /* The * mark matches any number of characters
+            * except . and /. Move path to next character. */
+            path_char = al_ustr_get_next(path, &path_pos);
+         } else { /* Done with the wildcards and go to the next non wildcard
+                     glob character */
+            while (glob_char == '?' || glob_char == '*') {
+               glob_char = al_ustr_get_next(glob, &glob_pos);
+            }
+         }
+      } else {
+         /* If we get here the optionally folded characters must match. */
+         if (al_ustr_char_foldcase(path_char, flags) !=
+             al_ustr_char_foldcase(glob_char, flags))
+         {
+            return ALLEGRO_USTR_FNMATCH_NOMATCH;
+         }
+         /* Move glob and path to next character. */
+         glob_char = al_ustr_get_next(glob, &glob_pos);
+         path_char = al_ustr_get_next(path, &path_pos);
+      }
+
+   }
+   /* If we get here we matched all characters in path and it's a match. */
+   return ALLEGRO_USTR_FNMATCH_MATCH;
+}
+
+
 
 /* vim: set sts=3 sw=3 et: */

@@ -713,7 +713,6 @@ Returns true iff `us1` ends with `s2`.
 
 See also: [al_ustr_has_suffix], [al_ustr_has_prefix_cstr]
 
-
 ## UTF-16 conversion
 
 ### API: al_ustr_new_from_utf16
@@ -785,4 +784,20 @@ Returns the number of bytes written, which is the same as that returned
 by [al_utf16_width].
 
 See also: [al_utf8_encode], [al_ustr_encode_utf16]
+
+## File Name Matching
+
+## API: al_ustr_fnmatch
+
+Tries to match the file globbing pattern `glob` versus the name of a file in
++path+. The pattern +glob+ may contain the `*` wildcard, which means any number
+of any characters except `.` and `/`. It may also contain the `?` wildcard
+which means any one character except `.` and `/`. 
+
+The only values for +flag+ currently supported are 0 for normal operation,
+and ALLEGRO_USTR_FNMATCH_CASEFOLD which, if set, will perform the pattern
+matching in a case-insensitive way.
+
+Returns zero if the glob matches the path, or nonzero if it did not match
+or an error occurred.
 

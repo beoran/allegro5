@@ -18,9 +18,9 @@ typedef struct _al_tagbstring ALLEGRO_USTR_INFO;
 #ifndef __al_tagbstring_defined
 #define __al_tagbstring_defined
 struct _al_tagbstring {
-	int mlen;
-	int slen;
-	unsigned char * data;
+   int mlen;
+   int slen;
+   unsigned char * data;
 };
 #endif
 
@@ -140,6 +140,28 @@ AL_FUNC(size_t, al_ustr_size_utf16, (const ALLEGRO_USTR *us));
 AL_FUNC(size_t, al_ustr_encode_utf16, (const ALLEGRO_USTR *us, uint16_t *s, size_t n));
 AL_FUNC(size_t, al_utf16_width, (int c));
 AL_FUNC(size_t, al_utf16_encode, (uint16_t s[], int32_t c));
+
+
+/* File name globbing. Not all flaggs are currently supported. */
+
+typedef enum ALLEGRO_USTR_FNMATCH_RESULTS {
+   ALLEGRO_USTR_FNMATCH_MATCH   = 0,
+   ALLEGRO_USTR_FNMATCH_NOMATCH = 1,   /* Match failed. */
+   ALLEGRO_USTR_FNMATCH_BADARG  = 2,   /* Bad arguments. */
+   ALLEGRO_USTR_FNMATCH_NOMEM   = 3,   /* No memory. */
+} ALLEGRO_USTR_FNMATCH_RESULTS;
+
+
+typedef enum ALLEGRO_USTR_FNMATCH_FLAGS {   
+   ALLEGRO_USTR_FNMATCH_NOESCAPE = 0x01, /* Disable backslash escaping. */
+   ALLEGRO_USTR_FNMATCH_PATHNAME = 0x02, /* * wildcards do not match a /.*/
+   ALLEGRO_USTR_FNMATCH_PERIOD   = 0x04, /* * wildcards do not match a period */ 
+   ALLEGRO_USTR_FNMATCH_CASEFOLD = 0x08, /* Case insensitive match. */
+} ALLEGRO_USTR_FNMATCH_FLAGS;
+   
+AL_FUNC(int, al_ustr_fnmatch, (const ALLEGRO_USTR * gl, const ALLEGRO_USTR * pa, int flags));
+
+
 
 #ifdef __cplusplus
    }
