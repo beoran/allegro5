@@ -274,9 +274,9 @@ static int al_for_each_fs_entry_handle_entry(
 
 /* Function: al_for_each_fs_entry
  */
-bool al_for_each_fs_entry (
+int al_for_each_fs_entry (
    ALLEGRO_FS_ENTRY *dir,
-   bool (*callback)(ALLEGRO_FS_ENTRY *e, void *extra),
+   int (*callback)(ALLEGRO_FS_ENTRY *e, void *extra),
    int flags,
    void *extra)
 {
@@ -316,13 +316,13 @@ static int al_for_each_file_callback_wrapper(ALLEGRO_FS_ENTRY * e, void * extra)
    int result;
    const char * name = al_get_fs_entry_name(e);
    int mode          = al_get_fs_entry_mode(e);
-   if (info->flags & ALLEGRO_FOR_EACH_FILE_SHORT_NAME) {
+   if (info->flags & ALLEGRO_FOR_EACH_FILE_FILENAME) {
       ALLEGRO_PATH * path = al_create_path(name);
       if (!path) {
          al_set_errno(ENOMEM);
-         return AL_FOR_EACH_FILE_ERROR;
+         return ALLEGRO_FOR_EACH_FILE_ERROR;
       }
-      result = info->callback(al_get_path_basename(path), mode, info->extra);
+      result = info->callback(al_get_path_filename(path), mode, info->extra);
       al_destroy_path(path);
    } else  {
       result = info->callback(name, mode, info->extra);

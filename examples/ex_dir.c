@@ -54,16 +54,16 @@ static void print_entry(ALLEGRO_FS_ENTRY *entry)
 }
 
 
-static bool print_directory_callback(const char * filename, int mode, void * extra) {
+static int print_directory_callback(const char * filename, int mode, void * extra) {
    log_printf("%s: (%d) %s\n", (char *) extra,  mode, filename);
-   return true;
+   return ALLEGRO_FOR_EACH_FILE_OK;
 }
 
 static void print_directory(char * dirname)
 {
    log_printf("\n------------------------------------\nExample of al_for_each_filename:\n\n");   
    al_for_each_file(dirname, print_directory_callback,
-   ALLEGRO_FOR_EACH_FILE_SHORT_NAME |
+   ALLEGRO_FOR_EACH_FILE_FILENAME |
    ALLEGRO_FILEMODE_ISFILE |
    ALLEGRO_FOR_EACH_FILE_FILTER |
    ALLEGRO_FOR_EACH_FILE_RECURSE,
@@ -71,10 +71,10 @@ static void print_directory(char * dirname)
 }
 
 
-static bool print_fs_entry_callback(ALLEGRO_FS_ENTRY * entry, void * extra) {
+static int print_fs_entry_callback(ALLEGRO_FS_ENTRY * entry, void * extra) {
    (void) extra;
    print_file(entry);
-   return true;
+   return ALLEGRO_FOR_EACH_FILE_OK;
 }
 
 static void print_fs_entry(ALLEGRO_FS_ENTRY * dir)

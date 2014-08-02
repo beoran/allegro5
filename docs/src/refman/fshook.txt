@@ -33,7 +33,7 @@ This enum contain flags that control the operation of [al_for_each_file]
 and [al_for_each_fs_entry]. 
 
 * ALLEGRO_FOR_EACH_FILE_RECURSE - Recurse into directories
-* ALLEGRO_FOR_EACH_FILE_BASENAME - Call the callback with the basename
+* ALLEGRO_FOR_EACH_FILE_FILENAME - Call the callback with the filename
   of the file in stead of the full absolute path only for [al_for_each_file].  
 * ALLEGRO_FOR_EACH_FILE_FILTER - Filter out files that don't match one of
   [ALLEGRO_FILE_MODE] flags which should e binary orred with this flag.
@@ -261,7 +261,7 @@ If the flags have +ALLEGRO_FOR_EACH_FILE_RECURSE+ set then
 [al_for_each_fs_entry]  will recurse into all directories it finds
 in +dir+ and sub direcories of it.
 
-The flag +ALLEGRO_FOR_EACH_FILE_BASENAME+ has no effect for
+The flag +ALLEGRO_FOR_EACH_FILE_FILENAME+ has no effect for
 [al_for_each_fs_entry], it's for use by [al_for_each_file].
 
 If the flag ALLEGRO_FOR_EACH_FILE_FILTER is set, then you should binary OR it
