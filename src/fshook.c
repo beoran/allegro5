@@ -241,6 +241,7 @@ ALLEGRO_FILE *al_open_fs_entry(ALLEGRO_FS_ENTRY *e, const char *mode)
 /* Halper to handle a single entry of al_for_each_entry */
 static int al_for_each_fs_entry_handle_entry(
    ALLEGRO_FS_ENTRY *entry,
+   const char * pattern,
    int (*callback)(ALLEGRO_FS_ENTRY *e, void *extra),
    int flags,
    void *extra)
@@ -248,7 +249,7 @@ static int al_for_each_fs_entry_handle_entry(
    int result;
    int mode    = al_get_fs_entry_mode(entry);
    /* Handle recursion if requested. Do this before filtering so even
-    * filetered entries are recursed into.  This also ensures depth-first
+    * filtered entries are recursed into.  This also ensures depth-first
     * recursion.
     */
    if (mode & ALLEGRO_FILEMODE_ISDIR) {
@@ -263,7 +264,18 @@ static int al_for_each_fs_entry_handle_entry(
    /* Filter if requested. */
    if (flags & ALLEGRO_FOR_EACH_FILE_FILTER) {
       int filter  = flags & 0xff; /* Low bits contain filter. */
-      if (!(filter & mode)) return true;
+      if (!(filter & mode)) return ALLEGRO_FOR_EACH_FILE_OK;
+   }
+
+   /* Filter on pattern if requested */
+   if (pattern) {
+      ALLEGRO_USTR_INFO pi, fi;
+      ALLEGRO_USTR * pattern_ustr, * filename_ustr;
+      pattern_ustr = al_ref_cstr(&pi, pattern);
+      filename_ustr = al_ref_cstr(&fi, al_get_fs_entry_name(entry));
+      if (0 != al_ustr_fnmatch(pattern_ustr, filename_ustr, 0)) {
+         return ALLEGRO_FOR_EACH_FILE_OK;
+      }
    }
    
    result = callback(entry, extra);
@@ -276,6 +288,7 @@ static int al_for_each_fs_entry_handle_entry(
  */
 int al_for_each_fs_entry (
    ALLEGRO_FS_ENTRY *dir,
+   const char * pattern,
    int (*callback)(ALLEGRO_FS_ENTRY *e, void *extra),
    int flags,
    void *extra)
@@ -290,7 +303,7 @@ int al_for_each_fs_entry (
       
    entry = al_read_directory(dir);
    while(entry) {
-      int result = al_for_each_fs_entry_handle_entry(entry, callback, flags, extra);
+      int result = al_for_each_fs_entry_handle_entry(entry, pattern, callback, flags, extra);
       al_destroy_fs_entry(entry);
       if (result < ALLEGRO_FOR_EACH_FILE_OK) {
          return result;
@@ -306,6 +319,7 @@ typedef struct ALLEGRO_FOR_EACH_FILE_INFO {
    int flags;
    void * extra;
    const char * path;
+   const char * pattern;
 } ALLEGRO_FOR_EACH_FILE_INFO;
 
 
@@ -334,6 +348,7 @@ static int al_for_each_file_callback_wrapper(ALLEGRO_FS_ENTRY * e, void * extra)
  */
 int al_for_each_file(
    const char *path,
+   const char *pattern,
    int (*callback)(const char * filename, int mode, void *extra),
    int flags,
    void *extra)
@@ -349,7 +364,9 @@ int al_for_each_file(
    info.extra     = extra;
    info.flags     = flags;
    info.path      = path;
-   result         = al_for_each_fs_entry(dir, al_for_each_file_callback_wrapper,
+   info.pattern   = pattern;
+   result         = al_for_each_fs_entry(dir,
+                     pattern, al_for_each_file_callback_wrapper,
                      flags, &info);
    al_destroy_fs_entry(dir);
    return result;

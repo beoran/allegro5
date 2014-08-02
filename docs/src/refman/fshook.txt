@@ -270,6 +270,13 @@ with one or more [ALLEGRO_FILE_MODE] flags. Filesystem entries of which the
 +flags+ will be filtered out in that +callback+ will not be called for them.
 However, this has no effect on recursive iteration which will visit even
 directories that are being filtered out.
+
+If the +pattern+ is set to NULL it will be ignored. Otherwise,
+it will be used as a file name matching patter for [al_ustr_fnmatch].
+All functions whose name does not match the pattern according
+to [al_ustr_fnmatch] will be filtered out in that +callback+ will not be called
+for them. However, this has no effect on recursive iteration which will visit
+even directories that are being filtered out. 
  
 This function returns +ALLEGRO_FOR_EACH_FILE_OK+ if it sucessfully
 iterated over all requested entries of +dir+. It returns
@@ -327,6 +334,13 @@ match the [ALLEGRO_FILE_MODE] flags ORrred into +flags+ will be filtered out in
 that +callback+ will not be called for them. However, this has no effect on
 recursive iteration which will visit even directories that are being filtered
 out.
+
+If the +pattern+ is set to NULL it will be ignored. Otherwise,
+it will be used as a file name matching patter for [al_ustr_fnmatch].
+All functions whose name does not match the pattern according
+to [al_ustr_fnmatch] will be filtered out in that +callback+ will not be called
+for them. However, this has no effect on recursive iteration which will visit
+even directories that are being filtered out. 
  
 This function returns +ALLEGRO_FOR_EACH_FILE_OK+ if it sucessfully
 iterated over all requested entries of +dir+. It returns

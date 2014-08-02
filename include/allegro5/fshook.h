@@ -139,12 +139,14 @@ typedef enum ALLEGRO_FOR_EACH_FILE_RESULTS
 
 AL_FUNC(int,  al_for_each_fs_entry, (
          ALLEGRO_FS_ENTRY *dir,
+         const char * pattern,
          int (*callback)(ALLEGRO_FS_ENTRY *e, void *extra),
          int flags,
          void *extra));
 
 AL_FUNC(int,  al_for_each_file, (
          const char *path,
+         const char *pattern,
          int (*callback)(const char * filename, int mode, void *extra),
          int flags,
          void *extra));
