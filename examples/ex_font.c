@@ -114,7 +114,7 @@ int main(int argc, char **argv)
      */
     x = 10;
     y = 300;
-
+    al_draw_textf(f3, al_map_rgb(0, 255, 255), x,  y - 20, 0, "Draw glyphs: ");
     for (range = 0; range < 4; range++) {
        int start = ranges[2*range];
        int stop  = ranges[2*range + 1];      
