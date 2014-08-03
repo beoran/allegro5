@@ -21,6 +21,7 @@
 
 
 #include <math.h>
+#include <ctype.h>
 #include "allegro5/allegro.h"
 
 #include "allegro5/allegro_font.h"
@@ -377,7 +378,8 @@ int al_get_font_ranges(ALLEGRO_FONT *f, int ranges_count, int *ranges)
  * storage. */
 
 static const ALLEGRO_USTR *
-get_ustr_word(ALLEGRO_USTR *ustr, ALLEGRO_USTR_INFO *info, int start, int * end )
+get_ustr_word(const ALLEGRO_USTR *ustr,
+              ALLEGRO_USTR_INFO *info, int start, int * end )
 {
    int pos = start;
    int ch;
@@ -414,7 +416,7 @@ ustr_chomp(const ALLEGRO_USTR * ustr, ALLEGRO_USTR_INFO * info)
  */
 int al_draw_multiline_ustr(const ALLEGRO_FONT *font,
      ALLEGRO_COLOR color, float x, float y, float w, int flags,
-     ALLEGRO_USTR *ustr)
+     const ALLEGRO_USTR *ustr)
 {
    int prev;
    int stop;
