@@ -114,6 +114,9 @@ int main(int argc, char **argv)
      */
     x = 10;
     y = 300;
+    /* Draw a yellow text with the builtin font */
+    al_draw_textf(f3, al_map_rgb(255, 0, 255), x, y - 10, 0,
+        "Per glyph text output:");
 
     for (range = 0; range < 4; range++) {
        int start = ranges[2*range];

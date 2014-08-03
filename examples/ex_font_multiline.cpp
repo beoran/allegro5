@@ -22,8 +22,10 @@ private:
    Dialog d;
    Label text_label;
    Label width_label;
+   Label align_label;
    TextEntry text_entry;
    HSlider width_slider;
+   List text_align;
 
 public:
    Prog(const Theme & theme, ALLEGRO_DISPLAY *display);
@@ -35,15 +37,24 @@ Prog::Prog(const Theme & theme, ALLEGRO_DISPLAY *display) :
    d(Dialog(theme, display, 10, 20)),
    text_label(Label("Text")),
    width_label(Label("Width")),
+   align_label(Label("Align")),
    text_entry(TextEntry("This is multi line text output with a\nhard break,\n\ntwice even!")),
-   width_slider(HSlider(200, al_get_display_width(display)))
+   width_slider(HSlider(200, al_get_display_width(display))),
+   text_align(List(0))
 {
-   d.add(text_label, 0, 16, 1, 1);
-   d.add(text_entry, 1, 16, 8, 1);
+   text_align.append_item("Left");
+   text_align.append_item("Center");
+   text_align.append_item("Right");
 
-   d.add(width_label,  0, 18, 1, 1);
-   d.add(width_slider, 1, 18, 8, 1);
+   d.add(text_label, 0, 15, 1, 1);
+   d.add(text_entry, 1, 15, 8, 1);
 
+   d.add(width_label,  0, 16, 1, 1);
+   d.add(width_slider, 1, 16, 8, 1);
+   
+   d.add(align_label,  0, 17, 1, 1);
+   d.add(text_align ,  1, 17, 1, 3); 
+    
 }
 
 void Prog::run()
@@ -65,15 +76,24 @@ void Prog::run()
 void Prog::draw_text()
 {
    int lines;
-   const int x  = 10 ;
-   const int y  = 10;
-   const int w = width_slider.get_cur_value();   
-   const int th = al_get_font_line_height(font);
+   int x  = 10, y  = 10, tx = 10;
+   int w = width_slider.get_cur_value();   
+   int th = al_get_font_line_height(font);
+   int flags = 0;
    ALLEGRO_USTR_INFO info;
    const ALLEGRO_USTR * ustr = al_ref_cstr(&info, text_entry.get_text());
+   if (text_align.get_selected_item_text() == "Left") {
+      flags = ALLEGRO_ALIGN_LEFT | ALLEGRO_ALIGN_INTEGER;
+   } else if (text_align.get_selected_item_text() == "Center") {
+      flags = ALLEGRO_ALIGN_CENTER | ALLEGRO_ALIGN_INTEGER;
+      tx = 10 + w / 2;
+   } else if (text_align.get_selected_item_text() == "Right") {
+      flags = ALLEGRO_ALIGN_RIGHT | ALLEGRO_ALIGN_INTEGER;
+      tx = 10 + w;
+   }
 
-   lines = al_draw_multiline_ustr(font, al_map_rgb_f(1, 1, 1), x, y, w,
-      ALLEGRO_ALIGN_INTEGER, (ALLEGRO_USTR *) ustr);
+   lines = al_draw_multiline_ustr(font, al_map_rgb_f(1, 1, 1), tx, y, w,
+      flags, (ALLEGRO_USTR *) ustr);
 
    al_draw_rectangle(x, y,  x + w, y + lines*th, al_map_rgb(0, 0, 255), 0);
 }
