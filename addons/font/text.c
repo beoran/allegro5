@@ -414,7 +414,7 @@ ustr_chomp(const ALLEGRO_USTR * ustr, ALLEGRO_USTR_INFO * info)
 
 /* Function: al_draw_multiline_ustr
  */
-int al_draw_multiline_ustr(const ALLEGRO_FONT *font,
+void al_draw_multiline_ustr(const ALLEGRO_FONT *font,
      ALLEGRO_COLOR color, float x, float y, float w, int flags,
      const ALLEGRO_USTR *ustr)
 {
@@ -464,11 +464,44 @@ int al_draw_multiline_ustr(const ALLEGRO_FONT *font,
    /* Draw the last, pending line. */
    line = al_ref_ustr(&line_info, ustr, line_start, line_stop);
    al_draw_ustr(font, color, x, y, flags, line);
-         
-   
-   return lines;
 }
- 
+
+
+
+/* Function: al_draw_multiline_text
+ */
+void al_draw_multiline_text(const ALLEGRO_FONT *font,
+     ALLEGRO_COLOR color, float x, float y, float max_width, int flags,
+     const char *text)
+{
+   ALLEGRO_USTR_INFO info;
+   ASSERT(font);
+   ASSERT(text);
+   al_draw_multiline_ustr(font, color, x, y, max_width, flags,
+      al_ref_cstr(&info, text));
+}
+
+
+/* Function: al_draw_multiline_textf
+ */
+void al_draw_multiline_textf(const ALLEGRO_FONT *font,
+     ALLEGRO_COLOR color, float x, float y, float max_width, int flags,
+     const char *format, ...)
+{
+   ALLEGRO_USTR *buf;
+   va_list ap;
+   ASSERT(font);
+   ASSERT(format);
+
+   va_start(ap, format);
+   buf = al_ustr_new("");
+   al_ustr_vappendf(buf, format, ap);
+   va_end(ap);
+
+   al_draw_multiline_ustr(font, color, x, y, max_width, flags, buf);
+
+   al_ustr_free(buf);
+} 
 
 
 

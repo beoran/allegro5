@@ -118,9 +118,10 @@ void Prog::draw_text()
       font = font_bin;
    }
    
-   lines = al_draw_multiline_ustr(font, al_map_rgb_f(1, 1, 1), tx, y, w,
+   al_draw_multiline_ustr(font, al_map_rgb_f(1, 1, 1), tx, y, w,
       flags, (ALLEGRO_USTR *) ustr);
-   
+
+   lines = 10;
    th = al_get_font_line_height(font);
    al_draw_rectangle(x, y,  x + w, y + lines*th, al_map_rgb(0, 0, 255), 0);
 }
