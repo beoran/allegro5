@@ -112,6 +112,15 @@ ALLEGRO_FONT_FUNC(uint32_t, al_get_allegro_font_version, (void));
 ALLEGRO_FONT_FUNC(int, al_get_font_ranges, (ALLEGRO_FONT *font,
    int ranges_count, int *ranges));
 
+ALLEGRO_FONT_FUNC(int, al_get_multiline_text_dimensions, (const ALLEGRO_FONT *f,
+   const char *text, int max_width,
+   int *bbx, int *bby, int *bbw, int *bbh));
+ALLEGRO_FONT_FUNC(int, al_get_multiline_ustr_dimensions, (const ALLEGRO_FONT *f,
+   const char *text, int max_width,
+   int *bbx, int *bby, int *bbw, int *bbh));
+ALLEGRO_FONT_FUNC(int, al_draw_multiline_text, (const ALLEGRO_FONT *font, ALLEGRO_COLOR color, float x, float y, float max_width, int flags, const char *text));
+ALLEGRO_FONT_FUNC(int, al_draw_multiline_ustr, (const ALLEGRO_FONT *font, ALLEGRO_COLOR color, float x, float y, float max_width, int flags, const ALLEGRO_USTR *text));
+
 
 #ifdef __cplusplus
    }

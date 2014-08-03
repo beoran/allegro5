@@ -371,4 +371,103 @@ int al_get_font_ranges(ALLEGRO_FONT *f, int ranges_count, int *ranges)
    return f->vtable->get_font_ranges(f, ranges_count, ranges);
 }
 
+
+/* Helper function that gets a word, that is a non-blank sequence separated by
+ * blanks from an ALLEGRO_USTR starting at start using the passed in info for
+ * storage. */
+
+static const ALLEGRO_USTR *
+get_ustr_word(ALLEGRO_USTR *ustr, ALLEGRO_USTR_INFO *info, int start, int * end )
+{
+   int pos = start;
+   int ch;
+   while ((ch = (int) al_ustr_get_next(ustr, &pos)) > 0) {
+      if (isspace(ch)) break;      
+   }
+   *end = pos;
+   return al_ref_ustr(info, ustr, start, pos);
+}
+
+/** Helper function that returns the last character of ustr */
+static int32_t ustr_last(const ALLEGRO_USTR * ustr) {
+   int length     = al_ustr_length(ustr);
+   return al_ustr_prev_get(ustr, &length);
+}
+
+/** Helper function that chomps off the last character of ustr if it
+ * is a blank. 
+ **/
+static const ALLEGRO_USTR *
+ustr_chomp(const ALLEGRO_USTR * ustr, ALLEGRO_USTR_INFO * info)
+{
+   int length     = al_ustr_length(ustr);
+   int32_t last   = al_ustr_prev_get(ustr, &length);
+   if (isspace(last)) {
+      return al_ref_ustr(info, ustr, 0, length);
+   } else {
+      return ustr;
+   }
+} 
+
+
+/* Function: al_draw_multiline_ustr
+ */
+int al_draw_multiline_ustr(const ALLEGRO_FONT *font,
+     ALLEGRO_COLOR color, float x, float y, float w, int flags,
+     ALLEGRO_USTR *ustr)
+{
+   int prev;
+   int stop;
+   ALLEGRO_USTR_INFO word_info, chomp_info, line_info, chomp_line_info;
+   const ALLEGRO_USTR * word, * chomp_word, * line;
+   bool end_eol, hard_break = false;
+   int line_start = 0, line_stop = 0, line_w = 0;
+   int pos = 0;
+   int line_h = al_get_font_line_height(font);
+   int lines = 1;
+   int word_w, chomp_word_w, word_end;
+   (void) flags;
+   stop = al_ustr_size(ustr);
+   while (pos < stop) {
+      word   = get_ustr_word(ustr, &word_info, pos, &word_end);
+      word_w = al_get_ustr_width(font, word);
+      prev   = ustr_last(word);
+      end_eol= (prev == '\n');
+      chomp_word = ustr_chomp(word, &chomp_info);
+
+      /* Check if word will overflow the line. */
+      chomp_word_w = al_get_ustr_width(font, chomp_word);
+      
+      if ((w < (chomp_word_w + line_w)) || hard_break ) {
+         /* Line is full, draw it and skip to new line. */
+         line = al_ref_ustr(&line_info, ustr, line_start, line_stop);
+         /* But the last character may need to be chomped off
+          * and not dran (space, new line, etc) */
+         line = ustr_chomp(line, &chomp_line_info);
+            
+         al_draw_ustr(font, color, x, y, flags, line);
+         line_start = line_stop;
+         
+         
+         y += line_h;
+         lines++;
+         line_w = 0;
+      }
+      line_stop += al_ustr_length(word);
+      line_w    += word_w;
+      pos        = word_end;
+      /* break the line next time round if this word ended with an eol. */
+      hard_break = end_eol;  
+   }
+   /* Draw the last, pending line. */
+   line = al_ref_ustr(&line_info, ustr, line_start, line_stop);
+   al_draw_ustr(font, color, x, y, flags, line);
+         
+   
+   return lines;
+}
+ 
+
+
+
 /* vim: set sts=3 sw=3 et: */
