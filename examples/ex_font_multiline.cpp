@@ -5,6 +5,7 @@
  */
 
 #include <string>
+#include <cmath>
 #include "allegro5/allegro.h"
 #include "allegro5/allegro_font.h"
 #include "allegro5/allegro_image.h"
@@ -15,6 +16,11 @@
 #include "common.c"
 
 #define TEST_TEXT "This is utf-8 €€€€€ multi line text output with a\nhard break,\n\ntwice even!"
+
+/* This is a custom mult line output function that demonstrates
+ * al_do_multiline_text. See below for the implementation. */
+static void draw_custom_multiline(ALLEGRO_FONT * font, int x, int y,
+   int max_width, int line_height, const char * text);
 
 ALLEGRO_FONT *font;
 ALLEGRO_FONT *font_ttf;
@@ -106,9 +112,7 @@ void Prog::draw_text()
    int w = width_slider.get_cur_value();
    int h = height_slider.get_cur_value();   
    int flags = 0;
-   int tx, ty, tw, th;
-   ALLEGRO_USTR_INFO info;
-   const ALLEGRO_USTR *ustr = al_ref_cstr(&info, text_entry.get_text());
+   const char * text = text_entry.get_text();
 
   if (text_font.get_selected_item_text() == "Truetype") {
       font = font_ttf;
@@ -137,7 +141,12 @@ void Prog::draw_text()
     
    al_draw_rectangle(sx, sy-2, sx + w, sy - 1, al_map_rgb(255, 0, 0), 0);
    al_draw_line(x, y, x, y + h, al_map_rgb(0, 255, 0), 0);
-   al_draw_multiline_ustr(font, al_map_rgb_f(1, 1, 1), x, y, w, h, flags, ustr);
+   al_draw_multiline_text(font, al_map_rgb_f(1, 1, 1), x, y, w, h, flags, text);
+
+   /* also do some custom bultiline drawing */
+   al_draw_text(font, al_map_rgb_f(0, 1, 1), x + w + 10, y, 0, "Custom multiline text:" );
+   draw_custom_multiline(font, x + w + 10 , y + 30, w, h, text);
+  
    
 }
 
@@ -200,5 +209,47 @@ int main(int argc, char *argv[])
 
    return 0;
 }
+
+
+/* Helper struct for draw_custom_multiline. */
+typedef struct DRAW_CUSTOM_LINE_EXTRA {
+   const ALLEGRO_FONT *font;
+   float x;
+   float y;
+   float line_height;
+   int flags;
+} DRAW_CUSTOM_LINE_EXTRA;
+
+
+/* This function is the helper callback that implements the actual drawing
+ * for draw_custom_multiline. 
+ */
+static bool draw_custom_multiline_cb(int line_num, const char *line, int size,
+   void *extra) {
+   DRAW_CUSTOM_LINE_EXTRA *s = (DRAW_CUSTOM_LINE_EXTRA *) extra;
+   float x, y;
+   ALLEGRO_USTR_INFO info;
+   ALLEGRO_COLOR c = al_map_rgb(255 - ((line_num * 64) % 255), 0, 0);
+   x  = s->x + sin(line_num) * 10; 
+   y  = s->y + (s->line_height * line_num);
+   al_draw_ustr(s->font, c, x, y, 0, al_ref_buffer(&info, line, size));
+   return (line_num < 5);
+}
+
+/* This is a custom mult line output function that demonstrates
+ * al_do_multiline_text. */
+static void draw_custom_multiline(ALLEGRO_FONT * font, int x, int y,
+   int max_width, int line_height, const char * text) {
+   DRAW_CUSTOM_LINE_EXTRA extra;
+
+   extra.font = font;
+   extra.x = x;
+   extra.y = y;
+   extra.line_height = line_height + al_get_font_line_height(font);
+   
+   al_do_multiline_text(font, max_width, text,
+      draw_custom_multiline_cb, (void *)&extra);
+}
+
 
 /* vim: set sts=3 sw=3 et: */

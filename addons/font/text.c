@@ -479,10 +479,10 @@ static const ALLEGRO_USTR *get_next_soft_line(const ALLEGRO_USTR *ustr,
  */
 void al_do_multiline_ustr(const ALLEGRO_FONT *font, float max_width,
    const ALLEGRO_USTR *ustr,
-   bool (*cb)(int line_num, const ALLEGRO_USTR * line, void * extra),
+   bool (*cb)(int line_num, const ALLEGRO_USTR * line, void *extra),
    void *extra)
 {
-   const char * linebreak  = "\n\r";
+   const char *linebreak  = "\n\r";
    const ALLEGRO_USTR *hard_line, *soft_line;
    ALLEGRO_USTR_INFO hard_line_info, soft_line_info;
    int hard_line_pos = 0, soft_line_pos = 0;
@@ -500,13 +500,13 @@ void al_do_multiline_ustr(const ALLEGRO_FONT *font, float max_width,
          max_width);
       /* No soft line here because it's an empty hard line. */
       if (!soft_line) { 
-         /* Calll the callback with null to indicate this. */
-         proceed = cb(line_num, NULL, extra);
+         /* Call the callback with empty string to indicate an empty line. */
+         proceed = cb(line_num, al_ustr_empty_string(), extra);
          if (!proceed) return;
          line_num ++;
       }
       while(soft_line) {
-         /* Call the callback on the soft line. */
+         /* Call the callback on the next soft line. */
          proceed = cb(line_num, soft_line, extra);
          if (!proceed) return;
          line_num++;
@@ -519,26 +519,26 @@ void al_do_multiline_ustr(const ALLEGRO_FONT *font, float max_width,
    }
 }
 
+
+
 /* Helper struct for al_do_multiline_text. */
 typedef struct _DO_MULTILINE_TEXT_EXTRA {
    bool (*callback)(int line_num, const char *line, int size, void *extra);
    void *extra;
 } _DO_MULTILINE_TEXT_EXTRA;
 
+
+
 /* The functions do_multiline_text_cb is the helper callback
- * that adapts al_do_multiline_ustr to al_do_multiline_text. 
+ * that "adapts" al_do_multiline_ustr to al_do_multiline_text. 
  */
 static bool do_multiline_text_cb(int line_num, const ALLEGRO_USTR *line,
    void *extra) {
-   _DO_MULTILINE_TEXT_EXTRA * s = extra;
-
-   if (line) { 
-      return s->callback(line_num, al_cstr(line), al_ustr_size(line), s->extra);
-   } else {
-      return s->callback(line_num, NULL, 0, s->extra);
-   }   
-   return true;
+   _DO_MULTILINE_TEXT_EXTRA *s = extra;
+   
+   return s->callback(line_num, al_cstr(line), al_ustr_size(line), s->extra);
 }
+
 
 
 /*  Function: al_do_multiline_text
@@ -560,6 +560,7 @@ void al_do_multiline_text(const ALLEGRO_FONT *font,
 }
 
 
+
 /* Helper struct for al_draw_multiline_ustr. */
 typedef struct _DRAW_MULTILINE_USTR_EXTRA {
    const ALLEGRO_FONT *font;
@@ -570,19 +571,22 @@ typedef struct _DRAW_MULTILINE_USTR_EXTRA {
    int flags;
 } _DRAW_MULTILINE_USTR_EXTRA;
 
+
+
 /* The function draw_multiline_ustr_cb is the helper callback
  * that implements the actual drawing for al_draw_multiline_ustr. 
  */
 static bool draw_multiline_ustr_cb(int line_num, const ALLEGRO_USTR *line,
    void *extra) {
-   _DRAW_MULTILINE_USTR_EXTRA * s = extra;
+   _DRAW_MULTILINE_USTR_EXTRA *s = extra;
    float y;
    
-   if (!line) return true;
-   y  = s->y + s->line_height * (float) line_num;
+   y  = s->y + (s->line_height * line_num);
    al_draw_ustr(s->font, s->color, s->x, y, s->flags, line);
    return true;
 }
+
+
 
 /* Function: al_draw_multiline_ustr
  */
@@ -591,12 +595,19 @@ void al_draw_multiline_ustr(const ALLEGRO_FONT *font,
      int flags, const ALLEGRO_USTR *ustr)
 {
    _DRAW_MULTILINE_USTR_EXTRA extra;
+   ASSERT(font);
+   ASSERT(ustr);
+   
    extra.font = font;
    extra.color = color;
    extra.x = x;
    extra.y = y;
-   extra.line_height = (line_height == 0) ? al_get_font_line_height(font) :
-      line_height;
+   if (line_height < 1) { 
+      extra.line_height =  al_get_font_line_height(font);
+   }
+   else {
+      extra.line_height = line_height;
+   }
    extra.flags = flags;
 
    al_do_multiline_ustr(font, max_width, ustr, draw_multiline_ustr_cb, &extra);
@@ -614,7 +625,7 @@ void al_draw_multiline_text(const ALLEGRO_FONT *font,
    ASSERT(font);
    ASSERT(text);
    
-   al_draw_multiline_ustr(font, color, x, y, max_width, flags, line_height,
+   al_draw_multiline_ustr(font, color, x, y, max_width, line_height, flags, 
       al_ref_cstr(&info, text));
 }
 

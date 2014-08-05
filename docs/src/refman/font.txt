@@ -241,7 +241,7 @@ See also: [al_grab_font_from_bitmap]
 ### API: al_draw_multiline_text
 
 Like [al_draw_text], but this function supports drawing multiple lines of text.
-If will break `text` in lines based on it's contents and the `max_width`
+It will break `text` in lines based on it's contents and the `max_width`
 parameter. The lines are then layed out vertically depending on the
 `line_height` parameter and drawn each as if [al_draw_text] was called
 on them.
@@ -272,12 +272,13 @@ starting at `y` and with a vertical distance between them of `line_height`.
 If `line_height` is zero (`0`), then the value returned by
 [al_get_font_line_height] on `font` will be used as the default value in stead.
 
-To calculate the size of the bounding box of text this function will draw
-beforehand, without actually drawing it, use [al_get_multiline_text_dimensions].
+For complex or custom text layout that [al_draw_multiline_text] does not
+provide, or for calculating the size of what this function will draw
+without actually drawing it, you can use use [al_do_multiline_text].
 
 Since: 5.1.9
 
-See also: [al_get_multiline_text_dimensions], [al_draw_multiline_text],
+See also: [al_do_multiline_text], [al_draw_multiline_text],
 [al_draw_multiline_textf]
 
 ### API: al_draw_multiline_ustr
@@ -288,7 +289,7 @@ instead of a NUL-terminated char array.
 Since: 5.1.9
 
 See also: [al_draw_multiline_text], [al_draw_multiline_textf],
-[al_get_multiline_ustr_dimensions]
+[al_do_multiline_text]
 
 ### API: al_draw_multinline_textf
 
@@ -298,32 +299,99 @@ All parameters have the same meaning as with [al_draw_multiline_text] otherwise.
 Since: 5.1.9
 
 See also: [al_draw_multiline_text], [al_draw_multiline_ustr],
-[al_get_multiline_text_dimensions]
+[al_do_multiline_text]
 
-### API: al_get_multiline_text_dimensions
+### API: al_do_multiline_text
 
-This function calculates the dimensions of the bounding box of `text` if it
-is drawn by [al_draw_multiline_text] with identical `font`, `text`, `max_width`
-and `line_height` parameters.
+This function processes the `text` and splits it into lines as
+[al_draw_multiline_text] would, and then calls the callback `cb` once
+for every line. This is useful for custom drawing of multiline text,
+or for calculating the size of multiline text ahead of time.
 
-Returned variables (all in pixel):
+It will break `text` in lines based on it's contents and the `max_width`
+parameter. Either newline `\n` or carriage return `\r` in the `text` will
+cause a "hard" line break after their occurrence in the string. The text
+after a hard break is placed on a new line.
 
-- bbx, bby - Offset to upper left corner of bounding box of the text
-             [al_draw_multiline_text] will draw.
-- bbw, bbh - Dimensions of bounding box of the text [al_draw_multiline_text]
-             will draw.
+The `max_with` parameter controls the maximum desired width of the lines.
+This function will try to introduce a "soft" line break after the longest
+possible series of words that would fit in `max_length` when drawn
+with the given `font`. A "soft" line break can occur on either a space ` `
+or tab `\t` character.
 
-This function could be useful, for example, to calculate what clipping rectangle
-to use before drawing the multiline text, or to set up some form of scrolling.
+However, it is possible that `max_width` is too small, or the words in `text`
+are too long to fit `max_width` when drawn with `font`. In that case, the word
+that is too wide will simply be placed compeltely on a line by itself.
+
+For every line that this function splits `text` into , the callback `cb`
+will be called once.  This callback `cb` must be of type
+`bool callback(int line_num, const char *line, int size, void *extra)`.
+
+The callback `cb` will be called with the number of the line starting from zero
+and counting up in `line_num`, a pointer to the beginning character of the line
+in `line`, the size of the line in `size`, and the pointer passed in the
+`extra` parameter to [al_do_multiline_text].
+
+Note that while the `line` pointer points to the beginning of the line,
+however, `line` is NOT guaranteed to be a NUL terminated string.
+In stead, `line` is simply a pointer, normally to a character in `text`,
+or to an empty string in case of an empty line. If you need a NUL terminated
+string, you will have to copy `line` to a buffer and NUL terminate it yourself.
+
+The pointer `line` is not guaranteed to be valid after the callback `cb`
+has returned. So in case you still need the contents of `line` after that,
+you must also make a copy of it yourself. In case of an empty line
+the parameter `size` to the callback will be zero and `line` will point
+to an empty string.
+
+When `cb` returns true, [al_do_multiline_text] will continue on
+to the next line. And when `cb` returns false, this function will
+stop immediately and not call `cb` anymore.
 
 Since: 5.1.9
 
 See also: [al_draw_multiline_text]
 
-### API: al_get_multiline_ustr_dimensions
+### API: al_do_multiline_ustr
 
-Like [al_get_multiline_text_dimensions], except the text is passed as
-an ALLEGRO_USTR instead of a NUL-terminated char array.
+This function processes the `ustr` and splits it into lines as
+[al_draw_multiline_ustr] would, and then calls the callback `cb` once
+for every line. This is useful for custom drawing of multiline text,
+or for calculating the size of multiline text ahead of time.
+
+It will break `ustr` in lines based on it's contents and the `max_width`
+parameter. Either newline `\n` or carriage return `\r` in the `ustr` will
+cause a "hard" line break after their occurrence in the string. The text
+after a hard break is placed on a new line.
+
+The `max_with` parameter controls the maximum desired width of the lines.
+This function will try to introduce a "soft" line break after the longest
+possible series of words that would fit in `max_length` when drawn
+with the given `font`. A "soft" line break can occur on either a space ` `
+or tab `\t` character.
+
+However, it is possible that `max_width` is too small, or the words in `text`
+are too long to fit `max_width` when drawn with `font`. In that case, the word
+that is too wide will simply be placed compeltely on a line by itself.
+
+For every line that this function splits `ustr` into , the callback `cb`
+will be called once.  This callback `cb` must be of type
+`bool callback(int line_num, const ALLEGRO_USTR *line, void *extra)`.
+
+The callback `cb` will be called with the number of the line starting from zero
+and counting up in `line_num`, a pointer to an ALLEGRO_USTR that represents the
+Unicode text of the line in `line` and the pointer passed in the
+`extra` parameter to [al_do_multiline_text].
+
+The pointer `line` is not guaranteed to be valid after the callback `cb`
+has returned. So in case you still need the contents of `line` after that,
+you must make a copy of it yourself. In case of an empty line
+the parameter `size` to the callback will be zero and `line` will
+be set to the result of calling [al_ustr_empty_string].
+
+When `cb` returns true, [al_do_multiline_text] will continue on
+to the next line. And when `cb` returns false, this function will
+stop immediately and not call `cb` anymore.
 
 Since: 5.1.9
 

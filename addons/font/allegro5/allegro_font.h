@@ -119,11 +119,11 @@ ALLEGRO_FONT_FUNC(void, al_draw_multiline_ustr, (const ALLEGRO_FONT *font, ALLEG
 ALLEGRO_FONT_FUNC(void, al_do_multiline_text, (const ALLEGRO_FONT *font,
    float max_width, const char *text,
    bool (*cb)(int line_num, const char *line, int size, void *extra),
-   void * extra));
+   void *extra));
 
 ALLEGRO_FONT_FUNC(void, al_do_multiline_ustr, (const ALLEGRO_FONT *font,
    float max_width, const ALLEGRO_USTR *ustr,
-   bool (*cb)(int line_num, const ALLEGRO_USTR * line, void * extra),
+   bool (*cb)(int line_num, const ALLEGRO_USTR *line, void *extra),
    void *extra));
 
 
