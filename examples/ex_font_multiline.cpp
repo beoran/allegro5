@@ -102,7 +102,6 @@ void Prog::run()
 void Prog::draw_text()
 {
    int x  = 10, y  = 10;
-   int rx = 10, ry = 10;
    int sx = 10, sy = 10;
    int w = width_slider.get_cur_value();
    int h = height_slider.get_cur_value();   
@@ -118,24 +117,17 @@ void Prog::draw_text()
    } else if (text_font.get_selected_item_text() == "Builtin") {
       font = font_bin;
    }
-
-   al_get_multiline_ustr_dimensions(font, ustr, w, h, &tx, &ty, &tw, &th);
    
    if (text_align.get_selected_item_text() == "Left") {
       flags = ALLEGRO_ALIGN_LEFT | ALLEGRO_ALIGN_INTEGER;
-      rx = x + tx;
    } else if (text_align.get_selected_item_text() == "Center") {
       flags = ALLEGRO_ALIGN_CENTER | ALLEGRO_ALIGN_INTEGER;
       x = 10 + w / 2;
-      rx = 10 + tx + (w - tw) / 2;
    } else if (text_align.get_selected_item_text() == "Right") {
       flags = ALLEGRO_ALIGN_RIGHT | ALLEGRO_ALIGN_INTEGER;
       x  = 10 + w;
-      rx = 10 + tx + (w - tw); 
    }
-   ry = y + ty; 
-
- 
+  
 
    /* Draw a red rectangle on the top with the requested width,
     * a blue rectangle around the real bounds of the text, 
@@ -144,7 +136,6 @@ void Prog::draw_text()
     */
     
    al_draw_rectangle(sx, sy-2, sx + w, sy - 1, al_map_rgb(255, 0, 0), 0);
-   al_draw_rectangle(rx, ry, rx + tw, ry + th, al_map_rgb(0, 0, 255), 0);
    al_draw_line(x, y, x, y + h, al_map_rgb(0, 255, 0), 0);
    al_draw_multiline_ustr(font, al_map_rgb_f(1, 1, 1), x, y, w, h, flags, ustr);
    

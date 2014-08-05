@@ -374,9 +374,9 @@ int al_get_font_ranges(ALLEGRO_FONT *f, int ranges_count, int *ranges)
 
 
 
-/* This helper function helps splitting an ustr is several delimited parts. 
- * It returns returns an ustr thet refers to
- * the next part of the string that is delimited by the delimiters in delim.
+/* This helper function helps splitting an ustr in several delimited parts. 
+ * It returns an ustr that refers to the next part of the string that
+ * is delimited by the delimiters in delimiter.
  * Returns NULL at the end of the string.
  * Pos is updated to byte index of character after the delimiter or
  * to the end of the string.
@@ -475,6 +475,114 @@ static const ALLEGRO_USTR *get_next_soft_line(const ALLEGRO_USTR *ustr,
 }
 
 
+/* Function: al_do_multiline_ustr
+ */
+void al_do_multiline_ustr(const ALLEGRO_FONT *font, float max_width,
+   const ALLEGRO_USTR *ustr,
+   bool (*cb)(int line_num, const ALLEGRO_USTR * line, void * extra),
+   void *extra)
+{
+   const char * linebreak  = "\n\r";
+   const ALLEGRO_USTR *hard_line, *soft_line;
+   ALLEGRO_USTR_INFO hard_line_info, soft_line_info;
+   int hard_line_pos = 0, soft_line_pos = 0;
+   int line_num = 0;
+   bool proceed;
+
+   /* For every "hard" line separated by a newline character... */
+   hard_line = ustr_split_next(ustr, &hard_line_info, &hard_line_pos,
+      linebreak);
+   while (hard_line) {
+      /* For every "soft" line in the "hard" line... */
+      soft_line_pos = 0;
+      soft_line =
+      get_next_soft_line(hard_line, &soft_line_info, &soft_line_pos, font,
+         max_width);
+      /* No soft line here because it's an empty hard line. */
+      if (!soft_line) { 
+         /* Calll the callback with null to indicate this. */
+         proceed = cb(line_num, NULL, extra);
+         if (!proceed) return;
+         line_num ++;
+      }
+      while(soft_line) {
+         /* Call the callback on the soft line. */
+         proceed = cb(line_num, soft_line, extra);
+         if (!proceed) return;
+         line_num++;
+   
+         soft_line = get_next_soft_line(hard_line, &soft_line_info,
+            &soft_line_pos, font, max_width);
+      }     
+      hard_line = ustr_split_next(ustr, &hard_line_info, &hard_line_pos,
+         linebreak);
+   }
+}
+
+/* Helper struct for al_do_multiline_text. */
+typedef struct _DO_MULTILINE_TEXT_EXTRA {
+   bool (*callback)(int line_num, const char *line, int size, void *extra);
+   void *extra;
+} _DO_MULTILINE_TEXT_EXTRA;
+
+/* The functions do_multiline_text_cb is the helper callback
+ * that adapts al_do_multiline_ustr to al_do_multiline_text. 
+ */
+static bool do_multiline_text_cb(int line_num, const ALLEGRO_USTR *line,
+   void *extra) {
+   _DO_MULTILINE_TEXT_EXTRA * s = extra;
+
+   if (line) { 
+      return s->callback(line_num, al_cstr(line), al_ustr_size(line), s->extra);
+   } else {
+      return s->callback(line_num, NULL, 0, s->extra);
+   }   
+   return true;
+}
+
+
+/*  Function: al_do_multiline_text
+ */
+void al_do_multiline_text(const ALLEGRO_FONT *font,
+   float max_width, const char *text,
+   bool (*cb)(int line_num, const char *line, int size, void *extra),
+   void *extra)
+{
+   ALLEGRO_USTR_INFO info;      
+   _DO_MULTILINE_TEXT_EXTRA extra2;
+   ASSERT(font);
+   ASSERT(text);
+   
+   extra2.callback = cb;
+   extra2.extra = extra;
+   al_do_multiline_ustr(font, max_width, al_ref_cstr(&info, text),
+      do_multiline_text_cb, &extra2);
+}
+
+
+/* Helper struct for al_draw_multiline_ustr. */
+typedef struct _DRAW_MULTILINE_USTR_EXTRA {
+   const ALLEGRO_FONT *font;
+   ALLEGRO_COLOR color;
+   float x;
+   float y;
+   float line_height;
+   int flags;
+} _DRAW_MULTILINE_USTR_EXTRA;
+
+/* The function draw_multiline_ustr_cb is the helper callback
+ * that implements the actual drawing for al_draw_multiline_ustr. 
+ */
+static bool draw_multiline_ustr_cb(int line_num, const ALLEGRO_USTR *line,
+   void *extra) {
+   _DRAW_MULTILINE_USTR_EXTRA * s = extra;
+   float y;
+   
+   if (!line) return true;
+   y  = s->y + s->line_height * (float) line_num;
+   al_draw_ustr(s->font, s->color, s->x, y, s->flags, line);
+   return true;
+}
 
 /* Function: al_draw_multiline_ustr
  */
@@ -482,98 +590,16 @@ void al_draw_multiline_ustr(const ALLEGRO_FONT *font,
      ALLEGRO_COLOR color, float x, float y, float max_width, float line_height,
      int flags, const ALLEGRO_USTR *ustr)
 {
-   const char * linebreak  = "\n\r";
-   const ALLEGRO_USTR *hard_line, *soft_line;
-   ALLEGRO_USTR_INFO hard_line_info, soft_line_info;
-   int hard_line_pos = 0, soft_line_pos = 0;
+   _DRAW_MULTILINE_USTR_EXTRA extra;
+   extra.font = font;
+   extra.color = color;
+   extra.x = x;
+   extra.y = y;
+   extra.line_height = (line_height == 0) ? al_get_font_line_height(font) :
+      line_height;
+   extra.flags = flags;
 
-   if (line_height == 0)
-      line_height = al_get_font_line_height(font);
-
-   /* For every "hard" line separated by a newline character... */
-   hard_line = ustr_split_next(ustr, &hard_line_info, &hard_line_pos,
-      linebreak);
-   while (hard_line) {
-      /* For every "soft" line in the "hard" line... */
-      soft_line_pos = 0;
-      soft_line =
-      get_next_soft_line(hard_line, &soft_line_info, &soft_line_pos, font,
-         max_width);
-      /* No soft line here because it's an empty hard line. */
-      if (!soft_line)
-         y += line_height;         
-      while(soft_line) {
-         /* Draw the soft line. */
-         al_draw_ustr(font, color, x, y, flags, soft_line);
-         y += line_height;
-         soft_line = get_next_soft_line(hard_line, &soft_line_info,
-            &soft_line_pos, font, max_width);
-      }     
-      hard_line = ustr_split_next(ustr, &hard_line_info, &hard_line_pos,
-         linebreak);
-   }
-   
-}
-
-
-
-/* Function: al_get_multiline_ustr_dimensions
- */
-void al_get_multiline_ustr_dimensions(const ALLEGRO_FONT *font,
-   const ALLEGRO_USTR *ustr, float max_width, float line_height,
-   int *bbx, int *bby, int *bbw, int *bbh)
-{
-   const char *linebreak  = "\n\r";
-   const ALLEGRO_USTR *hard_line, *soft_line;
-   ALLEGRO_USTR_INFO hard_line_info, soft_line_info;
-   int hard_line_pos = 0, soft_line_pos = 0;
-   int max_w = 0;
-   int min_x = 0;
-   float total_h;
-   int lw, lh, lx, ly;
-   ASSERT(font);
-   ASSERT(ustr);
-   ASSERT(bbx);
-   ASSERT(bby);
-   ASSERT(bbw);
-   ASSERT(bbh);
-   
-   /* Height is always at least real line height no matter line_height. */
-   total_h = al_get_font_line_height(font);
-
-   if (line_height == 0)
-      line_height = total_h;
-   
-   /* For every "hard" line separated by a newline character... */
-   hard_line = ustr_split_next(ustr, &hard_line_info, &hard_line_pos,
-      linebreak);
-   while (hard_line) {
-      /* For every "soft" line in the "hard" line... */
-      soft_line_pos = 0;
-      soft_line =
-      get_next_soft_line(hard_line, &soft_line_info, &soft_line_pos, font,
-         max_width);
-      /* No soft line here because it's an empty hard line. */
-      if (!soft_line)
-         total_h += line_height ;         
-      while(soft_line) {
-         /* Calculate the size of the soft line. */
-         al_get_ustr_dimensions(font, soft_line, &lx, &ly, &lw, &lh);
-         if (lw > max_w)
-            max_w = lw;
-         if (lx < min_x)
-            min_x = lx;
-         total_h += line_height;
-         soft_line = get_next_soft_line(hard_line, &soft_line_info,
-            &soft_line_pos, font, max_width);
-      }     
-      hard_line = ustr_split_next(ustr, &hard_line_info, &hard_line_pos,
-         linebreak);
-   }
-   (*bbw) = max_w;
-   (*bbh) = total_h - line_height;
-   (*bbx) = min_x;
-   (*bby) = 0;
+   al_do_multiline_ustr(font, max_width, ustr, draw_multiline_ustr_cb, &extra);
 }
 
 
@@ -618,19 +644,8 @@ void al_draw_multiline_textf(const ALLEGRO_FONT *font,
 
 
 
-/* Function: al_get_multiline_text_dimensions
- */
-void al_get_multiline_text_dimensions(const ALLEGRO_FONT *font,
-   const char *text, float max_width, float line_height,
-   int *bbx, int *bby, int *bbw, int *bbh)
-{
-   ALLEGRO_USTR_INFO info;
-   ASSERT(font);
-   ASSERT(text);
-   
-   al_get_multiline_ustr_dimensions(font, al_ref_cstr(&info, text), max_width,
-      line_height, bbx, bby, bbw, bbh); 
-}
+
+
 
 
 /* vim: set sts=3 sw=3 et: */
