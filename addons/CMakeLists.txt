@@ -141,6 +141,19 @@ if(WANT_VIDEO)
     endif(SUPPORT_VIDEO)
 endif(WANT_VIDEO)
 
+
+if(SUPPORT_FONT AND WANT_OLF)
+    find_package(Freetype)
+    if(FREETYPE_FOUND)
+        add_subdirectory(olf)
+        set(SUPPORT_OLD 1 PARENT_SCOPE)
+        set(OLF_LINK_WITH ${OLF_LINK_WITH} PARENT_SCOPE)
+        list(APPEND ADDON_PKG_CONFIG_FILES allegro_olf)
+    else(FREETYPE_FOUND)
+        message("WARNING: FreeType not found, disabling olf support.")
+    endif(FREETYPE_FOUND)
+endif(SUPPORT_FONT AND WANT_OLF)
+
 add_subdirectory(main)
 # SUPPORT_MAIN and MAIN_LINK_WITH are spelt as such in this scope,
 # but are prefixed with ALLEGRO in the parent scope.

@@ -1,0 +1,1 @@
+#cmakedefine ALLEGRO_CFG_OLF_FREETYPE

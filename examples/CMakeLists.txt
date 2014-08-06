@@ -7,6 +7,7 @@ include_directories(
     ../addons/main
     ../addons/memfile
     ../addons/native_dialog
+    ../addons/olf
     ../addons/physfs
     ../addons/primitives
     ../addons/shader
@@ -33,6 +34,7 @@ set(MEMFILE x${MEMFILE_LINK_WITH})
 set(PHYSFS x${PHYSFS_LINK_WITH})
 set(PRIM x${PRIMITIVES_LINK_WITH})
 set(TTF ${FONT} x${TTF_LINK_WITH})
+set(OLF ${PRIM} ${FONT} x${OLF_LINK_WITH})
 set(VIDEO x${VIDEO_LINK_WITH})
 set(NIHGUI nihgui.cpp ${FONT} ${PRIM})
 
@@ -195,6 +197,7 @@ example(ex_font_justify ex_font_justify.cpp ${NIHGUI} ${IMAGE} ${TTF} ${DATA_IMA
 example(ex_logo ${FONT} ${TTF} ${IMAGE} ${PRIM} DATA ${DATA_TTF})
 example(ex_projection ${TTF} ${IMAGE} ${DATA_IMAGES} ${DATA_TTF})
 example(ex_ttf ${TTF} ${PRIM} DATA ${DATA_TTF} ex_ttf.ini)
+example(ex_olf ${OLF} ${PRIM} DATA ${DATA_TTF} ex_olf.ini)
 
 example(ex_acodec CONSOLE ${AUDIO} ${ACODEC})
 example(ex_acodec_multi CONSOLE ${AUDIO} ${ACODEC})
