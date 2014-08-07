@@ -316,13 +316,14 @@ typedef struct OLF_DRAW {
 } OLF_DRAW;
 
 
-static float olf_scale_x(float value, OLF_DRAW * draw) {
-   return draw->dx + value * draw->scale_x;
-}
+#define olf_scale_x(value, draw) (draw->dx + value * draw->scale_x)
+#define olf_scale_y(value, draw) (draw->dy + value * draw->scale_y)
 
+/*
 static float olf_scale_y(float value, OLF_DRAW * draw) {
    return draw->dy + value * draw->scale_y;
 }
+*/
 
 static int olf_move_to(const FT_Vector *to, void *user)
 {
@@ -389,25 +390,36 @@ static void olf_draw_outline(FT_Outline *outline, ALLEGRO_COLOR color,
 {
    FT_Outline_Funcs funcs;
    OLF_DRAW draw;
+   ALLEGRO_TRANSFORM newtrans, *oldtrans;
    
    funcs.move_to  = olf_move_to;
    funcs.line_to  = olf_line_to;
    funcs.conic_to = olf_conic_to;
    funcs.cubic_to = olf_cubic_to;
-   funcs.shift    = 0;
-   funcs.delta    = 0;
+   funcs.shift    = 1;
+   funcs.delta    = 1;
    /* FT's coordinates are wonky! */
 
    draw.color     = color;
    draw.x         = 0;
    draw.y         = 0;
-   draw.thickness = 1;
-   draw.scale_x   = 0.015625; /* (1 / 64)  == >> 6 */
-   draw.scale_y   = -0.015625;
+   draw.thickness = 0;
+   draw.scale_x   = 1.0 / 128.0; /* (1 / 64)  == >> 6 */
+   draw.scale_y   = -1.0 / 128.0;
    draw.dx        = x;
    draw.dy        = y;
+   /**
+    * Can't get these trabsforms to work, so scale by hand ... :p
+   oldtrans = al_get_current_transform();
+   al_copy_transform(&newtrans, oldtrans);
+   al_scale_transform(&newtrans, 0.0015625, -0.0015625);
+   al_translate_transform(&newtrans, x, y); 
+   al_use_transform(&newtrans);
+   */
     
    FT_Outline_Decompose(outline, &funcs, &draw);
+   
+   /* al_use_transform(oldtrans); */
 }
 
 /*
