@@ -889,7 +889,8 @@ static ALLEGRO_HAPTIC *whap_get_from_joystick(ALLEGRO_JOYSTICK *joy)
       al_unlock_mutex(haptic_mutex);
       return NULL;
    }
-
+   
+   whap->parent.driver = &_al_hapdrv_directx;
    whap->parent.device = joy;
    whap->parent.from   = _AL_HAPTIC_FROM_JOYSTICK;
 
@@ -1013,7 +1014,7 @@ struct dinput_error_pair {
   const char * text;
 };
 
-#define DIMKEP(ERROR) {ERROR, #ERROR}
+#define DIMKEP(ERROR) {(HRESULT)ERROR, #ERROR}
 
 struct dinput_error_pair dinput_errors[] = {
   DIMKEP(DI_BUFFEROVERFLOW),

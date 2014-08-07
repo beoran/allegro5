@@ -1169,7 +1169,9 @@ static ALLEGRO_JOYSTICK *joydx_get_joystick(int num)
          num--;
       }
    }
-
+   /* Must set the driver of the joystick for the wrapper driver */
+   ret->driver = &_al_joydrv_directx;
+   
    LeaveCriticalSection(&joydx_thread_cs);
 
 #if 0

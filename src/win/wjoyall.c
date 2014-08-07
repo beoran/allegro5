@@ -198,7 +198,9 @@ static void joyall_release_joystick(ALLEGRO_JOYSTICK *joy)
     * since the get_joystick function returns a
     * pointer to the real underlying driver-specific joystick data.
     */
-   joy->driver->release_joystick(joy);
+   if (joy) {
+      joy->driver->release_joystick(joy);
+   }
 }
 
 static void joyall_get_joystick_state(ALLEGRO_JOYSTICK *joy, ALLEGRO_JOYSTICK_STATE *ret_state)

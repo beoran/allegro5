@@ -8,8 +8,8 @@
  *                                           /\____/
  *                                           \_/__/
  *
- *      Windows haptic (force-feedback) device driver.
- *
+ *      Windows wrapper haptic (force-feedback) device driver.
+ *      This wraps around the XInput and DirectInput drivers to support both. 
  *      By Beoran.
  *
  *      See LICENSE.txt for copyright information.
@@ -162,12 +162,15 @@ static bool hapall_is_mouse_haptic(ALLEGRO_MOUSE *mouse)
 
 static bool hapall_is_joystick_haptic(ALLEGRO_JOYSTICK *joy)
 {
+   bool dx_ok = false, xi_ok = false; 
+   ASSERT(joy->driver);
+   
    if (joy->driver == &_al_joydrv_xinput) {
-      _al_hapdrv_xinput.is_joystick_haptic(joy);
+      dx_ok = _al_hapdrv_xinput.is_joystick_haptic(joy);
    } else if (joy->driver == &_al_joydrv_directx) {
-      _al_hapdrv_directx.is_joystick_haptic(joy);
-   } 
-   return false;
+      xi_ok = _al_hapdrv_directx.is_joystick_haptic(joy);
+   }
+   return dx_ok || xi_ok;
 }
 
 
@@ -305,7 +308,7 @@ static bool hapall_play_effect(ALLEGRO_HAPTIC_EFFECT_ID *id, int loops)
 
 static bool hapall_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   ALLEGRO_HAPTIC_DRIVER      *    driver = id->driver;
+   ALLEGRO_HAPTIC_DRIVER *driver = id->driver;
    /* Use the stored driver to perform the operation. */
    return driver->stop_effect(id);
 }
@@ -313,21 +316,24 @@ static bool hapall_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 
 static bool hapall_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   ALLEGRO_HAPTIC_DRIVER      *    driver = id->driver;
+   ALLEGRO_HAPTIC_DRIVER  *driver = id->driver;
    /* Use the stored driver to perform the operation. */
    return driver->is_effect_playing(id);
 }
 
 static bool hapall_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   ALLEGRO_HAPTIC_DRIVER      *    driver = id->driver;
+   ALLEGRO_HAPTIC_DRIVER *driver = id->driver;
    /* Use the stored driver to perform the operation. */
    return driver->release_effect(id);
 }
 
 
 static bool hapall_release(ALLEGRO_HAPTIC *haptic)
-{
+{   
+   if (!haptic) 
+      return false;
+      
    return haptic->driver->release(haptic);
 }
 

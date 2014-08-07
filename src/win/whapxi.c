@@ -526,7 +526,7 @@ static ALLEGRO_HAPTIC *hapxi_get_from_joystick(ALLEGRO_JOYSTICK *joy)
    al_lock_mutex(hapxi_mutex);
 
    hapxi = haptics + joyxi->index;
-
+   hapxi->parent.driver = &_al_hapdrv_xinput;
    hapxi->parent.device = joyxi;
    hapxi->parent.from   = _AL_HAPTIC_FROM_JOYSTICK;
    hapxi->active        =  true;
