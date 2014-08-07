@@ -95,7 +95,7 @@ ALLEGRO_JOYSTICK_DRIVER _al_joydrv_xinput =
    joyxi_get_active
 };
 
-
+/*
 void WINAPI XInputEnable(BOOL);
 DWORD WINAPI XInputSetState(DWORD, XINPUT_VIBRATION*);
 DWORD WINAPI XInputGetState(DWORD, XINPUT_STATE*);
@@ -103,7 +103,7 @@ DWORD WINAPI XInputGetKeystroke(DWORD, DWORD, PXINPUT_KEYSTROKE);
 DWORD WINAPI XInputGetCapabilities(DWORD, DWORD, XINPUT_CAPABILITIES*);
 DWORD WINAPI XInputGetDSoundAudioDeviceGuids(DWORD, GUID*, GUID*);
 DWORD WINAPI XInputGetBatteryInformation(DWORD, BYTE, XINPUT_BATTERY_INFORMATION*);
-
+*/
 
 /* the joystick structures */
 static ALLEGRO_JOYSTICK_XINPUT joyxi_joysticks[MAX_JOYSTICKS];

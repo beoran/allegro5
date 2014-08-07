@@ -442,7 +442,7 @@ Since: 5.1.9
 
 Returns the maximum amount of haptic effects that can be uploaded to the
 device.  This depends on the operating system, driver, platform and the 
-device itself. 
+device itself. This can this can return a value as low as 1. 
 
 Since: 5.1.8
 
@@ -521,9 +521,9 @@ Since: 5.1.8
 
 ## API: al_get_haptic_effect_duration
 
-Returns the estimated duration of the given haptic effect. This is merely 
-a convenience function for now, as it returns the sum of 
-`effect.replay.length` and `effect.replay.data`.  
+Returns the estimated duration in seconds of a single loop of the given haptic 
+effect. The effect's `effect.replay` must have been filled in correctly 
+before using this function.
 
 Since: 5.1.9
 

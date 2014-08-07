@@ -40,7 +40,7 @@
 #endif
 
 #ifndef ALLEGRO_XINPUT_POLL_DELAY
-#define ALLEGRO_XINPUT_POLL_DELAY 0.01
+#define ALLEGRO_XINPUT_POLL_DELAY 0.1
 #endif
 
 #ifdef ALLEGRO_MINGW32
@@ -57,10 +57,7 @@
 
 #include "allegro5/internal/aintern_wjoyxi.h"
 
-/* This is needed since the WINE header seem to lack this definition. */
-#ifndef XINPUT_CAPS_FFB_SUPPORTED
-#define XINPUT_CAPS_FFB_SUPPORTED 0x0001
-#endif
+
 
 ALLEGRO_DEBUG_CHANNEL("haptic")
 
@@ -71,23 +68,52 @@ ALLEGRO_DEBUG_CHANNEL("haptic")
  * XInput doesn't really support uploading the effects. */
 #define HAPTIC_EFFECTS_MAX     1
 
+/* Enum for the state of a haptic effect. The playback is managed by a small
+*  finite state machine. 
+*/
+
+typedef enum ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE {
+   ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_INACTIVE = 0,
+   ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_READY    = 1,
+   ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_STARTING = 2,
+   ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_PLAYING  = 3,
+   ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_DELAYED  = 4,
+   ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_STOPPING = 5,   
+} ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE;
+
+/* Allowed state transitions: 
+* from inactive to ready,
+* from ready to starting
+* from starting to delayed or playing
+* from delayed to playing
+* from playing to delayed (for loops) or stopping
+* from stopping to ready
+* from ready to inactive 
+*/
+
 typedef struct ALLEGRO_HAPTIC_EFFECT_XINPUT {
    ALLEGRO_HAPTIC_EFFECT effect;
    XINPUT_VIBRATION      vibration;
    int id;
    double start_time;
-   bool active;
-   bool playing;
-   bool stop_now;
+   double loop_start;
+   double stop_time;
+   int repeats;
+   int delay_repeated;
+   int play_repeated;
+   ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE state;
 } ALLEGRO_HAPTIC_EFFECT_XINPUT;
 
 
 typedef struct ALLEGRO_HAPTIC_XINPUT {
-  int                           flags;
+  /* Important, parent must be first. */
   ALLEGRO_HAPTIC                parent;
   ALLEGRO_JOYSTICK_XINPUT *     xjoy;
   bool                          active;
-  ALLEGRO_HAPTIC_EFFECT_XINPUT  effects[HAPTIC_EFFECTS_MAX];
+  ALLEGRO_HAPTIC_EFFECT_XINPUT  effect;
+  int                           flags;  
+  /* Only one effect is supported since the XInput API allows only one pair of 
+     vibration speeds to be set to the device.  */
 } ALLEGRO_HAPTIC_XINPUT;
 
 
@@ -174,64 +200,144 @@ static ALLEGRO_HAPTIC_XINPUT haptics[HAPTICS_MAX];
 /* For the background thread */
 static ALLEGRO_THREAD * hapxi_thread = NULL;
 static ALLEGRO_MUTEX  * hapxi_mutex = NULL;
-/* Use acondition variable to put the thread to sleep and prevent too
- frequent polling*/
+/* Use a condition variable to put the thread to sleep and prevent too
+ frequent polling. */
 static ALLEGRO_COND   * hapxi_cond = NULL;
 
 /* Forces vibration to stop immediately. */
-static void hapxi_force_stop(ALLEGRO_HAPTIC_XINPUT * hapxi,
+static bool hapxi_force_stop(ALLEGRO_HAPTIC_XINPUT * hapxi,
                            ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi)
 {
    XINPUT_VIBRATION no_vibration = { 0, 0 };
+   ALLEGRO_DEBUG("XInput haptic effect stopped.\n");
    XInputSetState(hapxi->xjoy->index, &no_vibration);
-   effxi->playing = false;
-   effxi->stop_now = false;
+   effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_READY;
+   return true;
 }
 
-/* Polls he xinput API for a single haptic device and effect. */
-static void hapxi_poll_haptic_effect(ALLEGRO_HAPTIC_XINPUT * hapxi,
+/* starts vibration immediately. If successfully also sets playing   */
+static bool hapxi_force_play(ALLEGRO_HAPTIC_XINPUT * hapxi, 
+                           ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi)
+{
+   DWORD res;
+   res = XInputSetState(hapxi->xjoy->index, &effxi->vibration);
+   ALLEGRO_DEBUG("Starting to play back haptic effect: %d.\n", (int)(res));
+   if (res == ERROR_SUCCESS) {
+      effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_PLAYING;
+      return true;
+   } else {
+      effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_READY;
+      return false;
+   }
+}
+
+
+
+static bool hapxi_poll_haptic_effect_ready(ALLEGRO_HAPTIC_XINPUT * hapxi,
+                              ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi) 
+{
+   (void) hapxi; (void) effxi;
+   /* when ready do nothing */
+   return true;
+}
+
+static bool hapxi_poll_haptic_effect_starting(ALLEGRO_HAPTIC_XINPUT *hapxi,
+                              ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi) 
+{
+   /* when starting switch to delayed mode or play mode */
+   double now = al_get_time();
+   if ((now - effxi->start_time) < effxi->effect.replay.delay) { 
+      effxi->loop_start = al_get_time();
+      effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_DELAYED;
+   } else {
+      hapxi_force_play(hapxi, effxi);
+   }  
+   ALLEGRO_DEBUG("Polling XInput haptic effect. Really Starting: %d!\n", effxi->state);
+   return true;
+}
+
+static bool hapxi_poll_haptic_effect_playing(ALLEGRO_HAPTIC_XINPUT *hapxi,
+                              ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi) 
+{
+   double now = al_get_time();
+   double stop = effxi->loop_start + effxi->effect.replay.delay + 
+      effxi->effect.replay.length;
+   (void) hapxi;
+   if (now > stop) {
+      /* may need to repeat play because of "loop" in playback. */
+      effxi->play_repeated++; 
+      if (effxi->play_repeated < effxi->repeats) { 
+         /* need to play another loop. Stop playing now. */
+         hapxi_force_stop(hapxi, effxi);
+         effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_DELAYED;
+         effxi->loop_start = al_get_time();
+      } else {
+        effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_STOPPING;     
+      }
+      return true;
+   }
+   return false;
+}
+
+static bool hapxi_poll_haptic_effect_delayed(ALLEGRO_HAPTIC_XINPUT * hapxi,
+                              ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi) 
+{
+   double now = al_get_time();
+   if (now > (effxi->loop_start + effxi->effect.replay.delay)) {
+      return hapxi_force_play(hapxi, effxi);
+   }
+   return false;
+}
+
+static bool hapxi_poll_haptic_effect_stopping(ALLEGRO_HAPTIC_XINPUT * hapxi,
+                              ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi) 
+{
+   /* when stopping, force stop and go to ready state (hapxi_force_stop does this)*/
+   return hapxi_force_stop(hapxi, effxi);
+}
+
+
+/* Polls the xinput API for a single haptic device and effect. */
+static bool hapxi_poll_haptic_effect(ALLEGRO_HAPTIC_XINPUT * hapxi,
                               ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi)
 {
-   double delay  = effxi->effect.replay.delay;
-   double length = effxi->effect.replay.length;
-   double now    = al_get_time();
-   
-   /* If the effect is playing...*/ 
-   if(effxi->playing) {
-      double delta  = now - effxi->start_time;
-      /* Playing longer than the total play time, so stop.
-       * Aslo stop if the stop flag was set.
-       * */
-      if (effxi->stop_now || (delta > (delay + length)) ) {
-         hapxi_force_stop(hapxi, effxi);
-      } /* Playing longer than delay, start playing. */
-      else if (delta > delay)  {
-         XInputSetState(hapxi->xjoy->index, &effxi->vibration);
-      }
-   }
+   /* Check the state of the effect. */
+   switch(effxi->state) {
+      case ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_INACTIVE: 
+         return false;
+      case ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_READY:
+         return hapxi_poll_haptic_effect_ready(hapxi, effxi);
+      case ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_STARTING:
+         return hapxi_poll_haptic_effect_starting(hapxi, effxi);
+      case ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_PLAYING:
+         return hapxi_poll_haptic_effect_playing(hapxi, effxi);
+      case ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_DELAYED:
+         return hapxi_poll_haptic_effect_delayed(hapxi, effxi);
+      case ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_STOPPING:
+         return hapxi_poll_haptic_effect_stopping(hapxi, effxi);      
+      default: 
+       ALLEGRO_DEBUG("XInput haptic effect state not valid :%d.\n", effxi->state);
+       return false;
+   }      
 }
 
 /* Polls the xinput API for a single haptic device. */
 static void hapxi_poll_haptic(ALLEGRO_HAPTIC_XINPUT * hapxi)
 {
-   int i;
-
-   for(i=0; i<HAPTIC_EFFECTS_MAX; i++) {
-      if(!hapxi->effects[i].active) continue;
-      hapxi_poll_haptic_effect(hapxi, hapxi->effects + i);
-   }
+   hapxi_poll_haptic_effect(hapxi, &hapxi->effect);
 }
 
-/* Polls the xinput API for hapti effects and starts
+/* Polls the xinput API for hapxi effect and starts
  * or stops playback when needed.
  */
 static void hapxi_poll_haptics(void)
 {
    int i;
-   
+
    for(i = 0; i < HAPTICS_MAX; i++) {
-      if(!haptics[i].active) continue;
-      hapxi_poll_haptic(haptics + i);
+      if(haptics[i].active) {
+         hapxi_poll_haptic(haptics + i);
+      }
    }
 }
 
@@ -240,20 +346,19 @@ static void hapxi_poll_haptics(void)
 static void * hapxi_poll_thread(ALLEGRO_THREAD *thread, void *arg)
 {
   ALLEGRO_TIMEOUT timeout;
-  /* Poll once every 10 milliseconds. XXX: Should this be configurable? */
-  al_init_timeout(&timeout, 0.01);
+  al_lock_mutex(hapxi_mutex);
   while(!al_get_thread_should_stop(thread)) {
-    al_lock_mutex(hapxi_mutex);
-    /* Wait for the condition for the polling time in stead of using
-     al_rest in the hope that this uses less CPU, and also allows the
-     polling thread to be awoken when needed. */
-    al_wait_cond_until(hapxi_cond, hapxi_mutex, &timeout);
-    /* If we get here poll joystick for new input or connection
-     * and dispatch events. */
-    hapxi_poll_haptics();
-    al_unlock_mutex(hapxi_mutex);
-  }
-  return arg;
+      /* Poll once every 10 milliseconds. XXX: Should this be configurable? */
+      al_init_timeout(&timeout, ALLEGRO_XINPUT_POLL_DELAY);
+      /* Wait for the condition to allow the
+      polling thread to be awoken when needed. */
+      al_wait_cond_until(hapxi_cond, hapxi_mutex, &timeout);
+      /* If we get here poll joystick for new input or connection
+      * and dispatch events. */
+      hapxi_poll_haptics();
+   }
+   al_unlock_mutex(hapxi_mutex);
+   return arg;
 }
 
 
@@ -300,7 +405,20 @@ static ALLEGRO_HAPTIC_XINPUT * hapxi_from_al(ALLEGRO_HAPTIC *hap)
 
 static void hapxi_exit_haptic(void)
 {
+   void * ret_value;
+   ASSERT(hapxi_thread);
    ASSERT(hapxi_mutex);
+   ASSERT(hapxi_cond);
+   
+   /* Request the event thread to shut down, signal the condition, then join the thread. */
+   al_set_thread_should_stop(hapxi_thread);
+   al_signal_cond(hapxi_cond);
+   al_join_thread(hapxi_thread, &ret_value);
+   
+   /* clean it all up. */
+   al_destroy_thread(hapxi_thread);
+   al_destroy_cond(hapxi_cond);
+   
    al_destroy_mutex(hapxi_mutex);
    hapxi_mutex = NULL;
 }
@@ -321,12 +439,14 @@ static bool hapxi_effect2win(
    (void) hapxi; 
    /* Generic setup */
    if (effect->type != ALLEGRO_HAPTIC_RUMBLE)
-     return false;
-
+      return false;
+   
+   /* Right motor is "weaker" than left one, That is, right produces a less 
+   violent vibration than left. */
    return
-   hapxi_magnitude2win(&effxi->vibration.wLeftMotorSpeed ,
-                        effect->data.rumble.weak_magnitude) &&
    hapxi_magnitude2win(&effxi->vibration.wRightMotorSpeed ,
+                        effect->data.rumble.weak_magnitude) &&
+   hapxi_magnitude2win(&effxi->vibration.wLeftMotorSpeed ,
                         effect->data.rumble.strong_magnitude);                        
 }
 
@@ -353,7 +473,17 @@ static bool hapxi_is_joystick_haptic(ALLEGRO_JOYSTICK *joy)
    if (!al_get_joystick_active(joy))
       return false;
    
-   return (joyxi->capabilities.Flags & XINPUT_CAPS_FFB_SUPPORTED);
+  /* IF this flag is not supported, then it means we're compiling against 
+    an older XInput library. In this case, the Flags are inoperable, 
+    and force feedback must be assumed to be always available.  */
+#ifndef XINPUT_CAPS_FFB_SUPPORTED
+   (void) joyxi;
+   ALLEGRO_DEBUG("Compiled against older XInput library, assuming force feedback support is available.\n");
+   return true;
+#else
+  ALLEGRO_DEBUG("joyxi->capabilities.Flags: %d <-> %d\n", joyxi->capabilities.Flags,  XINPUT_CAPS_FFB_SUPPORTED);
+  return (joyxi->capabilities.Flags & XINPUT_CAPS_FFB_SUPPORTED);
+#endif 
 }
 
 
@@ -390,8 +520,6 @@ static ALLEGRO_HAPTIC *hapxi_get_from_joystick(ALLEGRO_JOYSTICK *joy)
    ALLEGRO_JOYSTICK_XINPUT * joyxi = (ALLEGRO_JOYSTICK_XINPUT *) joy;
    ALLEGRO_HAPTIC_XINPUT   * hapxi;
 
-   int i;
-
    if (!al_is_joystick_haptic(joy))
       return NULL;
 
@@ -402,12 +530,12 @@ static ALLEGRO_HAPTIC *hapxi_get_from_joystick(ALLEGRO_JOYSTICK *joy)
    hapxi->parent.device = joyxi;
    hapxi->parent.from   = _AL_HAPTIC_FROM_JOYSTICK;
    hapxi->active        =  true;
-   for (i = 0; i < HAPTIC_EFFECTS_MAX; i++) {
-      hapxi->effects[i].active = false; /* not in use */
-   }
+   hapxi->effect.state  = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_INACTIVE; 
+   /* not in use */
    hapxi->parent.gain       = 1.0;
    hapxi->parent.autocenter = 0.0;
    hapxi->flags             = ALLEGRO_HAPTIC_RUMBLE;
+   hapxi->xjoy              = joyxi;
    al_unlock_mutex(hapxi_mutex);
 
    return &hapxi->parent;
@@ -476,8 +604,8 @@ static bool hapxi_set_autocenter(ALLEGRO_HAPTIC *dev, double intensity)
 static int hapxi_get_num_effects(ALLEGRO_HAPTIC *dev)
 {
    (void) dev;
-   /* Support only a constant amount of effects */
-   return HAPTIC_EFFECTS_MAX;
+   /* Support only one effect */
+   return 1;
 }
 
 
@@ -499,27 +627,23 @@ static bool hapxi_is_effect_ok(ALLEGRO_HAPTIC *haptic,
 static ALLEGRO_HAPTIC_EFFECT_XINPUT *
    hapxi_get_available_effect(ALLEGRO_HAPTIC_XINPUT * hapxi)
 {
-    int index;
-    for (index = 0; index < HAPTIC_EFFECTS_MAX; index ++) {
-      if (!hapxi->effects[index].active) {
-        /* Set up ID here. */
-        hapxi->effects[index].id  = index; 
-        return  hapxi->effects + index;
-      }
-    }
+   if(hapxi->effect.state == ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_INACTIVE) {
+      /* Set up ID here. */
+      hapxi->effect.id  = 0; 
+      return  &hapxi->effect;
+   }
     return NULL;
 }
 
 static bool hapxi_release_effect_windows(ALLEGRO_HAPTIC_EFFECT_XINPUT * effxi)
 {
-   effxi->active = false;
+   effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_INACTIVE;
    return true;
 }
 
 static bool hapxi_upload_effect(ALLEGRO_HAPTIC *dev,
    ALLEGRO_HAPTIC_EFFECT *effect, ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   bool ok;
    ALLEGRO_HAPTIC_XINPUT *hapxi = hapxi_from_al(dev);
    ALLEGRO_HAPTIC_EFFECT_XINPUT * effxi = NULL;
 
@@ -539,7 +663,6 @@ static bool hapxi_upload_effect(ALLEGRO_HAPTIC *dev,
    if(!al_is_haptic_effect_ok(dev, effect))
      return  false;
 
-
    al_lock_mutex(hapxi_mutex);
 
    /* Is a haptic effect slot available? */
@@ -552,11 +675,12 @@ static bool hapxi_upload_effect(ALLEGRO_HAPTIC *dev,
    }
 
    if (!hapxi_effect2win(effxi, effect, hapxi)) {
-      ALLEGRO_WARN("Cannot convert haptic effect to XINPUT effect.");
+      ALLEGRO_WARN("Cannot convert haptic effect to XINPUT effect.\n");
       al_unlock_mutex(hapxi_mutex);
       return false;
    }
    
+   effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_READY;
    effxi->effect= (*effect);
    /* set ID handle to signify success */
    id->_haptic  = dev;
@@ -565,45 +689,63 @@ static bool hapxi_upload_effect(ALLEGRO_HAPTIC *dev,
    id->_effect_duration = al_get_haptic_effect_duration(effect);
 
    al_unlock_mutex(hapxi_mutex);
-   return ok;
+   return true;
 }
 
 
+static ALLEGRO_HAPTIC_XINPUT * 
+  hapxi_device_for_id(ALLEGRO_HAPTIC_EFFECT_ID *id) {
+   return (ALLEGRO_HAPTIC_XINPUT *) id->_haptic;  
+ }
+
+
+static ALLEGRO_HAPTIC_EFFECT_XINPUT * 
+  hapxi_effect_for_id(ALLEGRO_HAPTIC_EFFECT_ID *id) {
+   return (ALLEGRO_HAPTIC_EFFECT_XINPUT*) id->_pointer;
+ }
+
 static bool hapxi_play_effect(ALLEGRO_HAPTIC_EFFECT_ID *id, int loops)
 {
-   ALLEGRO_HAPTIC_XINPUT *hapxi = (ALLEGRO_HAPTIC_XINPUT *) id->_haptic;
-   ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi;
+   ALLEGRO_HAPTIC_XINPUT *hapxi        = hapxi_device_for_id(id);
+   ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi = hapxi_effect_for_id(id);
    
-   if ((!hapxi) || (id->_id < 0))
+   if ((!hapxi) || (id->_id < 0) || (!effxi) || (loops < 1))
       return false;
    al_lock_mutex(hapxi_mutex);
    /* Simply set some flags. The polling thread will see this and start playing.
       after the effect's delay has passed. */
-   effxi             = hapxi->effects + id->_id;
-   effxi->playing    = true;
+   effxi->state      = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_STARTING;
    effxi->start_time = al_get_time();
+   effxi->stop_time  = effxi->start_time + al_get_haptic_effect_duration(&effxi->effect) * loops;
+   effxi->repeats    = loops;
+   effxi->play_repeated = 0;
+   effxi->loop_start = effxi->start_time;
+
    id->_playing      = true;
    id->_start_time   = al_get_time();
-   id->_end_time     = id->_start_time;
-   id->_end_time    += id->_effect_duration * (double)loops;
+   id->_start_time   = effxi->start_time;
+   id->_end_time     = effxi->stop_time;
    al_unlock_mutex(hapxi_mutex);
+   al_signal_cond(hapxi_cond);
    return true;
 }
 
 
 static bool hapxi_stop_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   ALLEGRO_HAPTIC_XINPUT *hapxi = (ALLEGRO_HAPTIC_XINPUT *) id->_haptic;
-   ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi;
+   ALLEGRO_HAPTIC_XINPUT *hapxi        = hapxi_device_for_id(id);
+   ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi = hapxi_effect_for_id(id);
    
    if ((!hapxi) || (id->_id < 0))
       return false;
-   al_lock_mutex(hapxi_mutex);
    /* Simply set some flags. The polling thread will see this and stop playing.*/
-   effxi = hapxi->effects + id->_id;
-   effxi->stop_now = false;
+   effxi = (ALLEGRO_HAPTIC_EFFECT_XINPUT*) id->_pointer;  
+   if (effxi->state <= ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_READY) return false;
+   al_lock_mutex(hapxi_mutex);
+   effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_STOPPING;
    id->_playing = false;   
-   al_unlock_mutex(hapxi_mutex);   
+   al_unlock_mutex(hapxi_mutex);
+   al_signal_cond(hapxi_cond);   
    return true;
 }
 
@@ -612,54 +754,60 @@ static bool hapxi_is_effect_playing(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
    ALLEGRO_HAPTIC_XINPUT *hapxi;
    ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi;
-    
+   bool result; 
    ASSERT(id);
-   hapxi = (ALLEGRO_HAPTIC_XINPUT *) id->_haptic;
+   
+   hapxi = hapxi_device_for_id(id);
+   effxi = hapxi_effect_for_id(id);
 
    if ((!hapxi) || (id->_id < 0) || (!id->_playing))
       return false;
+   al_lock_mutex(hapxi_mutex);
+   ALLEGRO_DEBUG("Playing effect state: %d %p %lf %lf\n", effxi->state, effxi, al_get_time(), id->_end_time); 
 
-   effxi = hapxi->effects + id->_id;
-   /* Simply return the effect's flag, it's up to the polling thread to
-    * set this correctly.
-    */
-   return effxi->playing;
-}
+   result = (effxi->state > ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_READY);
+   al_unlock_mutex(hapxi_mutex);
+   al_signal_cond(hapxi_cond);
+   
+   return result;
+} 
 
 
 static bool hapxi_release_effect(ALLEGRO_HAPTIC_EFFECT_ID *id)
 {
-   ALLEGRO_HAPTIC_XINPUT *hapxi = (ALLEGRO_HAPTIC_XINPUT *)id->_haptic;
-   ALLEGRO_HAPTIC_EFFECT_XINPUT * effxi;
-   if ((!hapxi) || (id->_id < 0))
+   ALLEGRO_HAPTIC_XINPUT *hapxi        = hapxi_device_for_id(id);
+   ALLEGRO_HAPTIC_EFFECT_XINPUT *effxi = hapxi_effect_for_id(id);
+   bool result;
+   if ((!hapxi) || (!effxi))
       return false;
    
-   effxi = hapxi->effects + id->_id;
+   al_lock_mutex(hapxi_mutex);
    /* Forcefully stop since a normal stop may not be instant. */  
    hapxi_force_stop(hapxi, effxi);
-   return hapxi_release_effect_windows(effxi);
+   effxi->state = ALLEGRO_HAPTIC_EFFECT_XINPUT_STATE_INACTIVE;
+   result = hapxi_release_effect_windows(effxi);
+   al_unlock_mutex(hapxi_mutex);
+   return result;
 }
 
 
 static bool hapxi_release(ALLEGRO_HAPTIC *haptic)
 {
-   int index;
    ALLEGRO_HAPTIC_XINPUT *hapxi = hapxi_from_al(haptic);
    ASSERT(haptic);
 
-
    if (!hapxi->active)
       return false;
+   al_lock_mutex(hapxi_mutex);   
 
-   /* Release all effects for this device. */
-   for (index = 0; index < HAPTIC_EFFECTS_MAX ; index ++) {
-     /* Forcefully stop since a normal stop may not be instant. */  
-     hapxi_force_stop(hapxi, hapxi->effects + index);
-     hapxi_release_effect_windows(hapxi->effects + index);
-   }
-
+   /* Release the effect for this device. */
+   /* Forcefully stop since a normal stop may not be instant. */  
+   hapxi_force_stop(hapxi, &hapxi->effect);
+   hapxi_release_effect_windows(&hapxi->effect);
+  
    hapxi->active         = false;
    hapxi->parent.device  = NULL;
+   al_unlock_mutex(hapxi_mutex);
    return true;
 }
 

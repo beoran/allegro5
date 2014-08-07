@@ -29,6 +29,7 @@ struct Haptic
 static Haptic haptics[EX_MAX_HAPTICS];
 static int num_haptics = 0;
 static ALLEGRO_EVENT_QUEUE * joystick_queue;
+static ALLEGRO_TIMER * update_timer = NULL;
 
 static void release_all_haptics() {
    for (int i = 0; i < num_haptics; i++) {    
@@ -441,6 +442,8 @@ Prog::Prog(const Theme & theme, ALLEGRO_DISPLAY *display) :
    d.add(play_button, 6, 38, 3, 2);
    d.add(stop_button, 12, 38, 3, 2);
    
+   d.register_event_source(al_get_timer_event_source(update_timer));
+
 }
 
 void Prog::update()
@@ -721,7 +724,7 @@ void Prog::on_play()
       return;
    }
 
-   if (wavetype < 0) {
+   if ((wavetype < 0) && (type == ALLEGRO_HAPTIC_PERIODIC)) {
       message_label.set_text("Unknown Wave Form!");
       log_printf("Unknown wave type: %d on %s\n", wavetype, haptic->name);
       return;
@@ -791,8 +794,8 @@ void Prog::on_play()
       &haptic->effect, loops, &haptic->id);
    if (haptic->playing) {
       message_label.set_text("Playing...");
-      log_printf("Started playing effect type %s on %s\n", cap_to_name(type),
-         haptic->name);
+      log_printf("Started playing %d loops of effect type %s on %s\n", 
+                  loops, cap_to_name(type),   haptic->name);
       last_haptic = haptic;
    }
    else {
@@ -862,21 +865,26 @@ int main(int argc, char *argv[])
       }
    }
    
+  
    joystick_queue = al_create_event_queue();
    if (!joystick_queue) {
       abort_example("Could not create joystick event queue font.\n");
    }
    
    al_register_event_source(joystick_queue, al_get_joystick_event_source());
-
+  
    
    get_all_haptics();
 
    /* Don't remove these braces. */
    {
+      /* Set up a timer so the display of playback state is polled regularly. */
+      update_timer = al_create_timer(1.0);
       Theme theme(font);
       Prog prog(theme, display);
+      al_start_timer(update_timer);
       prog.run();
+      al_destroy_timer(update_timer);
    }
    
    release_all_haptics();
