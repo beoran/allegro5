@@ -92,6 +92,10 @@ struct ALLEGRO_XWIN_DISPLAY_OVERRIDABLE_INTERFACE
 bool _al_xwin_set_gtk_display_overridable_interface(uint32_t check_version,
    const ALLEGRO_XWIN_DISPLAY_OVERRIDABLE_INTERFACE *vt);
 
+/* ALLEGRO_FULLSCREEN_VIRTUAL stuff */
+bool x_set_fullscreen_via_net_wm(ALLEGRO_SYSTEM_XGLX *s, ALLEGRO_DISPLAY_XGLX *d);
+bool x_have_net_supporting_wm(Display *display);
+
 #endif /* !ALLEGRO_RASPBERRYPI */
 
 #endif

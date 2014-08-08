@@ -40,10 +40,15 @@ void al_copy_transform(ALLEGRO_TRANSFORM *dest, const ALLEGRO_TRANSFORM *src)
 void al_use_transform(const ALLEGRO_TRANSFORM *trans)
 {
    ALLEGRO_BITMAP *target = al_get_target_bitmap();
-   ALLEGRO_DISPLAY *display;
+   ALLEGRO_DISPLAY *display = target->display;
+   bool do_fullscreen_virtual_scale;
 
    if (!target)
       return;
+
+   do_fullscreen_virtual_scale = display &&
+      (display->flags & ALLEGRO_FULLSCREEN_VIRTUAL) &&
+      target == al_get_backbuffer(display);
 
    /* Changes to a back buffer should affect the front buffer, and vice versa.
     * Currently we rely on the fact that in the OpenGL drivers the back buffer
@@ -53,6 +58,12 @@ void al_use_transform(const ALLEGRO_TRANSFORM *trans)
 
    if (trans != &target->transform) {
       al_copy_transform(&target->transform, trans);
+
+      /* Backbuffer needs scaled in ALLEGRO_FULLSCREEN_VIRTUAL mode */
+      if (do_fullscreen_virtual_scale) {
+         al_scale_transform(&target->transform, display->fullscreen_scale_x,
+            display->fullscreen_scale_y);
+      }
       
       target->inverse_transform_dirty = true;
    }
@@ -62,10 +73,14 @@ void al_use_transform(const ALLEGRO_TRANSFORM *trans)
     * so the hardware transformation has to be kept at identity.
     */
    if (!al_is_bitmap_drawing_held()) {
-      display = target->display;
       if (display) {
          display->vt->update_transformation(display, target);
       }
+   }
+
+   /* Prevent multiplying transform over and over */
+   if (do_fullscreen_virtual_scale) {
+      al_copy_transform(&target->transform, trans);
    }
 }
 

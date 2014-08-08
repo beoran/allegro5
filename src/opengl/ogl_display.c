@@ -1,5 +1,5 @@
 /*         ______   ___    ___
- *        /\  _  \ /\_ \  /\_ \ 
+ *        /\  _  \ /\_ \  /\_ \
  *        \ \ \L\ \\//\ \ \//\ \      __     __   _ __   ___ 
  *         \ \  __ \ \ \ \  \ \ \   /'__`\ /'_ `\/\`'__\/ __`\
  *          \ \ \/\ \ \_\ \_ \_\ \_/\  __//\ \L\ \ \ \//\ \L\ \
@@ -45,7 +45,7 @@ void _al_ogl_setup_gl(ALLEGRO_DISPLAY *d)
    d->vt->set_projection(d);
 
    if (ogl->backbuffer)
-      _al_ogl_resize_backbuffer(ogl->backbuffer, d->w, d->h);
+      _al_ogl_resize_backbuffer(ogl->backbuffer, d->desired_w, d->desired_h);
    else
       ogl->backbuffer = _al_ogl_create_backbuffer(d);
 }
@@ -223,19 +223,19 @@ ALLEGRO_BITMAP* _al_ogl_create_backbuffer(ALLEGRO_DISPLAY *disp)
 
    ALLEGRO_DEBUG("Creating backbuffer bitmap\n");
    /* Using ALLEGRO_NO_PRESERVE_TEXTURE prevents extra memory being allocated */
-   backbuffer = _al_ogl_create_bitmap(disp, disp->w, disp->h,
+   backbuffer = _al_ogl_create_bitmap(disp, disp->desired_w, disp->desired_h,
       format, ALLEGRO_VIDEO_BITMAP | ALLEGRO_NO_PRESERVE_TEXTURE);
    if (!backbuffer) {
       ALLEGRO_DEBUG("Backbuffer bitmap creation failed.\n");
       return NULL;
    }
 
-   backbuffer->w = disp->w;
-   backbuffer->h = disp->h;
+   backbuffer->w = disp->desired_w;
+   backbuffer->h = disp->desired_h;
    backbuffer->cl = 0;
    backbuffer->ct = 0;
-   backbuffer->cr_excl = disp->w;
-   backbuffer->cb_excl = disp->h;
+   backbuffer->cr_excl = disp->desired_w;
+   backbuffer->cb_excl = disp->desired_h;
 
    ALLEGRO_TRACE_CHANNEL_LEVEL("display", 1)(
       "Created backbuffer bitmap (actual format: %s)\n",

@@ -570,7 +570,27 @@ static int draw_prim_indexed_raw(ALLEGRO_BITMAP* target, ALLEGRO_BITMAP* texture
 int _al_draw_prim_opengl(ALLEGRO_BITMAP* target, ALLEGRO_BITMAP* texture, const void* vtxs, const ALLEGRO_VERTEX_DECL* decl, int start, int end, int type)
 {
 #ifdef ALLEGRO_CFG_OPENGL
-   return draw_prim_raw(target, texture, 0, vtxs, decl, start, end, type);
+   int result;
+   ALLEGRO_DISPLAY *display = target->display;
+   ALLEGRO_TRANSFORM backup_transform;
+   bool do_fullscreen_virtual_scale =
+      display &&
+      (display->flags & ALLEGRO_FULLSCREEN_VIRTUAL) &&
+      target == al_get_backbuffer(display);
+   if (do_fullscreen_virtual_scale) {
+      ALLEGRO_TRANSFORM t;
+      al_copy_transform(&backup_transform, &display->proj_transform);
+      al_identity_transform(&t);
+      al_scale_transform(&t, display->fullscreen_scale_x, display->fullscreen_scale_y);
+      al_compose_transform(&t, &display->proj_transform);
+      al_set_projection_transform(display, &t);
+      display->vt->update_transformation(display, target);
+   }
+   result = draw_prim_raw(target, texture, 0, vtxs, decl, start, end, type);
+   if (do_fullscreen_virtual_scale) {
+      al_set_projection_transform(display, &backup_transform);
+   }
+   return result;
 #else
    (void)target;
    (void)texture;

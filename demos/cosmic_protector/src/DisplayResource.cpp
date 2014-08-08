@@ -25,7 +25,7 @@ bool DisplayResource::load(void)
    int flags = ALLEGRO_FULLSCREEN_WINDOW;
    al_set_new_display_option(ALLEGRO_SUPPORTED_ORIENTATIONS, ALLEGRO_DISPLAY_ORIENTATION_LANDSCAPE, ALLEGRO_REQUIRE);
 #else
-   int flags = useFullScreenMode ? ALLEGRO_FULLSCREEN : ALLEGRO_WINDOWED;
+   int flags = useFullScreenMode ? ALLEGRO_FULLSCREEN_VIRTUAL : ALLEGRO_WINDOWED;
 #endif
    al_set_new_display_flags(flags);
    display = al_create_display(BB_W, BB_H);

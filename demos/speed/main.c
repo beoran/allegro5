@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
       }
       else if (strcmp(argv[i], "-fullscreen") == 0) {
          /* if no width is specified, assume fullscreen_window */
-         display_flags |= w ? ALLEGRO_FULLSCREEN : ALLEGRO_FULLSCREEN_WINDOW;
+         display_flags |= w ? ALLEGRO_FULLSCREEN_VIRTUAL : ALLEGRO_FULLSCREEN_WINDOW;
       }
       else {
          n = atoi(argv[i]);
@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
             if (display_flags & ALLEGRO_FULLSCREEN_WINDOW) {
                /* toggle from fullscreen_window to fullscreen */
                display_flags &= ~ALLEGRO_FULLSCREEN_WINDOW;
-               display_flags |= ALLEGRO_FULLSCREEN;
+               display_flags |= ALLEGRO_FULLSCREEN_VIRTUAL;
             }
          }
          else if (!h) {

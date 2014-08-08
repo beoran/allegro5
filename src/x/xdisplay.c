@@ -218,7 +218,8 @@ static bool xdpy_create_display_window(ALLEGRO_SYSTEM_XGLX *system,
 
 
 static ALLEGRO_DISPLAY_XGLX *xdpy_create_display_locked(
-   ALLEGRO_SYSTEM_XGLX *system, int flags, int w, int h, int adapter)
+   ALLEGRO_SYSTEM_XGLX *system, int flags, int w, int h,
+   int desired_w, int desired_h, int adapter)
 {
    ALLEGRO_DISPLAY_XGLX *d = al_calloc(1, sizeof *d);
    ALLEGRO_DISPLAY *display = (ALLEGRO_DISPLAY *)d;
@@ -397,6 +398,18 @@ static ALLEGRO_DISPLAY_XGLX *xdpy_create_display_locked(
       display->extra_settings.settings[ALLEGRO_COMPATIBLE_DISPLAY] = 0;
    }
 
+   if (flags & ALLEGRO_FULLSCREEN_VIRTUAL) {
+      display->desired_w = desired_w;
+      display->desired_h = desired_h;
+      display->fullscreen_scale_x = (float)w / desired_w;
+      display->fullscreen_scale_y = (float)h / desired_h;
+   }
+   else {
+      display->desired_w = w;
+      display->desired_h = h;
+      display->fullscreen_scale_x = display->fullscreen_scale_y = 0;
+   }
+
    if (display->extra_settings.settings[ALLEGRO_COMPATIBLE_DISPLAY])
       _al_ogl_setup_gl(display);
 
@@ -457,6 +470,8 @@ static ALLEGRO_DISPLAY *xdpy_create_display(int w, int h)
    ALLEGRO_DISPLAY_XGLX *display;
    int flags;
    int adapter;
+   int desired_w = w;
+   int desired_h = h;
 
    if (system->x11display == NULL) {
       ALLEGRO_WARN("Not connected to X server.\n");
@@ -483,7 +498,20 @@ static ALLEGRO_DISPLAY *xdpy_create_display(int w, int h)
    _al_mutex_lock(&system->lock);
 
    adapter = al_get_new_display_adapter();
-   display = xdpy_create_display_locked(system, flags, w, h, adapter);
+
+   if (flags & ALLEGRO_FULLSCREEN_VIRTUAL) {
+      ALLEGRO_MONITOR_INFO info;
+      int _adapter;
+      if (adapter < 0)
+         _adapter = _al_xglx_get_default_adapter(system);
+      else
+         _adapter = adapter;
+      al_get_monitor_info(_adapter, &info);
+      w = info.x2 - info.x1;
+      h = info.y2 - info.y1;
+   }
+
+   display = xdpy_create_display_locked(system, flags, w, h, desired_w, desired_h, adapter);
 
    _al_mutex_unlock(&system->lock);
 

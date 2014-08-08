@@ -503,7 +503,16 @@ static bool xrandr_set_mode(ALLEGRO_SYSTEM_XGLX *s, ALLEGRO_DISPLAY_XGLX *d, int
 {
    int adapter = _al_xglx_get_adapter(s, d, false);
    int xscreen = _al_xglx_get_xscreen(s, adapter);
-   
+   ALLEGRO_DISPLAY *display = (ALLEGRO_DISPLAY *)d;
+
+   if ((display->flags & ALLEGRO_FULLSCREEN_VIRTUAL) && x_have_net_supporting_wm(s->x11display)) {
+      bool ret;
+      _al_mutex_lock(&s->lock);
+      ret = x_set_fullscreen_via_net_wm(s, d);
+      _al_mutex_unlock(&s->lock);
+      return ret;
+   }
+
    xrandr_screen *screen = _al_vector_ref(&s->xrandr_screens, xscreen);
    
    xrandr_crtc *crtc = xrandr_map_to_crtc(s, xscreen, adapter);

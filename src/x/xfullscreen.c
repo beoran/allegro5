@@ -364,7 +364,16 @@ static bool xfvm_set_mode(ALLEGRO_SYSTEM_XGLX *s, ALLEGRO_DISPLAY_XGLX *d, int w
 {
    int mode_idx = -1;
    int adapter = _al_xglx_get_adapter(s, d, false);
-   
+   ALLEGRO_DISPLAY *display = (ALLEGRO_DISPLAY *)d;
+
+   if ((display->flags & ALLEGRO_FULLSCREEN_VIRTUAL) && x_have_net_supporting_wm(s->x11display)) {
+      bool ret;
+      _al_mutex_lock(&s->lock);
+      ret = x_set_fullscreen_via_net_wm(s, d);
+      _al_mutex_unlock(&s->lock);
+      return ret;
+   }
+
 #ifdef ALLEGRO_XWINDOWS_WITH_XINERAMA
    /* TwinView workarounds, nothing to do here, since we can't really change or restore modes */
    if (s->xinerama_available && s->xinerama_screen_count != s->xfvm_screen_count) {

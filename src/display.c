@@ -51,6 +51,16 @@ ALLEGRO_DISPLAY *al_create_display(int w, int h)
       return NULL;
    }
 
+   /* ALLEGRO_FULLSCREEN_VIRTUAL is synonymous with ALLEGRO_FULLSCREEN on
+    * everything except Linux/X, so do some fiddling with the flags here
+    * so we don't have to handle two cases in the drivers.
+    */
+   flags = al_get_new_display_flags();
+   if (flags & ALLEGRO_FULLSCREEN_VIRTUAL) {
+      flags |= ALLEGRO_FULLSCREEN;
+      al_set_new_display_flags(flags);
+   }
+
    display = driver->create_display(w, h);
    if (!display) {
       ALLEGRO_ERROR("Failed to create display (NULL)\n");
@@ -131,6 +141,15 @@ ALLEGRO_DISPLAY *al_create_display(int w, int h)
        */
       al_convert_bitmaps();
    }
+
+   /* On Linux, the driver will set these. They're used to "trick" the user
+    * into thinking they got the display size they requested in
+    * ALLEGRO_FULLSCREEN_VIRTUAL mode.
+    */
+#ifndef ALLEGRO_LINUX
+   display->desired_w = w;
+   display->desired_h = h;
+#endif
 
    return display;
 }
@@ -269,7 +288,7 @@ int al_get_display_width(ALLEGRO_DISPLAY *display)
 {
    ASSERT(display);
 
-   return display->w;
+   return display->desired_w;
 }
 
 
@@ -280,7 +299,7 @@ int al_get_display_height(ALLEGRO_DISPLAY *display)
 {
    ASSERT(display);
 
-   return display->h;
+   return display->desired_h;
 }
 
 

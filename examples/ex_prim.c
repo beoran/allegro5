@@ -661,6 +661,7 @@ int main(int argc, char **argv)
    }
 
    // Create a window to display things on: 640x480 pixels
+   al_set_new_display_flags(ALLEGRO_FULLSCREEN_VIRTUAL);
    display = al_create_display(ScreenW, ScreenH);
    if (!display) {
       abort_example("Error creating display.\n");

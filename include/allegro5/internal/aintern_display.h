@@ -147,6 +147,12 @@ struct ALLEGRO_DISPLAY
 
    _AL_VECTOR display_invalidated_callbacks;
    _AL_VECTOR display_validated_callbacks;
+
+   /* ALLEGRO_FULLSCREEN_VIRTUAL stuff */
+   float fullscreen_scale_x;
+   float fullscreen_scale_y;
+   int desired_w;
+   int desired_h;
 };
 
 int  _al_score_display_settings(ALLEGRO_EXTRA_DISPLAY_SETTINGS *eds, ALLEGRO_EXTRA_DISPLAY_SETTINGS *ref);

@@ -40,6 +40,7 @@ int main(int argc, char **argv)
     al_init_image_addon();
     init_platform_specific();
 
+    al_set_new_display_flags(ALLEGRO_FULLSCREEN_VIRTUAL);
     display = al_create_display(640, 480);
     if (!display) {
        abort_example("Error creating display\n");
