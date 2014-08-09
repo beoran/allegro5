@@ -12,7 +12,6 @@ extern "C"
 #endif
 
 
-<<<<<<< HEAD
 typedef struct ALLEGRO_HAPTIC_DRIVER
 {
    int hapdrv_id;

@@ -109,10 +109,9 @@ static ALLEGRO_MUTEX  * joyall_mutex = NULL;
 /* Amount of directinput and xinput joystics known. */
 static int joyall_num_xinput, joyall_num_dinput;
 
-/* Sets p all joysticks from the two wrapped apis. */
+/* Sets up all joysticks from the two wrapped apis. */
 static void joyall_setup_joysticks(void) {
    int index;
-   int stop;
    
    joyall_num_dinput = _al_joydrv_directx.num_joysticks();
    joyall_num_xinput = _al_joydrv_xinput.num_joysticks();
@@ -122,8 +121,7 @@ static void joyall_setup_joysticks(void) {
       ALLEGRO_JOYSTICK * joystick       = _al_joydrv_xinput.get_joystick(index);
       joystick->driver = &_al_joydrv_xinput;
    }
-
-   stop = joyall_num_dinput + joyall_num_xinput; 
+ 
    for (index = 0; index < joyall_num_dinput; index++) {
       ALLEGRO_JOYSTICK * joystick       = _al_joydrv_directx.get_joystick(index);
       joystick->driver = &_al_joydrv_directx;
