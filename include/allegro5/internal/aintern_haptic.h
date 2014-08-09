@@ -7,10 +7,12 @@
 #include "allegro5/internal/aintern_events.h"
 
 #ifdef __cplusplus
-   extern "C" {
+extern "C"
+{
 #endif
 
 
+<<<<<<< HEAD
 typedef struct ALLEGRO_HAPTIC_DRIVER
 {
    int hapdrv_id;
@@ -73,18 +75,18 @@ struct ALLEGRO_HAPTIC
 extern const _AL_DRIVER_INFO _al_haptic_driver_list[];
 
 /* Macros for constructing the driver list */
-#define _AL_BEGIN_HAPTIC_DRIVER_LIST                            \
+#define _AL_BEGIN_HAPTIC_DRIVER_LIST                                 \
    const _AL_DRIVER_INFO _al_haptic_driver_list[] =                  \
    {
 
 #define _AL_END_HAPTIC_DRIVER_LIST                              \
-      {  0,                NULL,                false }        \
+      {  0,                NULL,                false }         \
    };
 
 
 
 #ifdef __cplusplus
-   }
+}
 #endif
 
 #endif
