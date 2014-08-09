@@ -2,7 +2,7 @@
 #define __al_included_allegro_aintern_wjoydxnu_h
 
 
-/** Part of the Windows DirectInput joystick 
+/** Part of the Windows DirectInput joystick
  * types are shared here for use by the haptic susbystem. */
 
 /* arbitrary limit to make life easier; this was the limit in Allegro 4.1.x */
@@ -25,7 +25,8 @@ ALLEGRO_STATIC_ASSERT(wjoydxnu, _AL_MAX_JOYSTICK_BUTTONS >= MAX_BUTTONS);
 #define GUID_EQUAL(a, b)     (0 == memcmp(&(a), &(b), sizeof(GUID)))
 
 
-typedef enum {
+typedef enum
+{
    STATE_UNUSED,
    STATE_BORN,
    STATE_ALIVE,
@@ -39,7 +40,8 @@ typedef enum {
 /* helper structure to record information through object_enum_callback */
 #define NAME_LEN     128
 
-typedef struct {
+typedef struct
+{
    bool have_x;      char name_x[NAME_LEN];
    bool have_y;      char name_y[NAME_LEN];
    bool have_z;      char name_z[NAME_LEN];
@@ -53,12 +55,14 @@ typedef struct {
 
 
 /* map a DirectInput axis to an Allegro (stick,axis) pair */
-typedef struct {
+typedef struct
+{
    int stick, axis;
 } AXIS_MAPPING;
 
 
-typedef struct ALLEGRO_JOYSTICK_DIRECTX {
+typedef struct ALLEGRO_JOYSTICK_DIRECTX
+{
    ALLEGRO_JOYSTICK parent;          /* must be first */
    CONFIG_STATE config_state;
    bool marked;

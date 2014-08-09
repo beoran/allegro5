@@ -52,7 +52,8 @@ typedef struct ALLEGRO_HAPTIC_DRIVER
 } ALLEGRO_HAPTIC_DRIVER;
 
 
-enum ALLEGRO_HAPTIC_PARENT {
+enum ALLEGRO_HAPTIC_PARENT
+{
    _AL_HAPTIC_FROM_JOYSTICK = 1,
    _AL_HAPTIC_FROM_MOUSE,
    _AL_HAPTIC_FROM_KEYBOARD,
@@ -64,10 +65,10 @@ enum ALLEGRO_HAPTIC_PARENT {
 struct ALLEGRO_HAPTIC
 {
    enum ALLEGRO_HAPTIC_PARENT from;
-   void * device;
+   void *device;
    double gain;
    double autocenter;
-   ALLEGRO_HAPTIC_DRIVER * driver;
+   ALLEGRO_HAPTIC_DRIVER *driver;
 };
 
 /* Haptic diver list. */
@@ -77,9 +78,8 @@ extern const _AL_DRIVER_INFO _al_haptic_driver_list[];
 #define _AL_BEGIN_HAPTIC_DRIVER_LIST                                 \
    const _AL_DRIVER_INFO _al_haptic_driver_list[] =                  \
    {
-
-#define _AL_END_HAPTIC_DRIVER_LIST                              \
-      {  0,                NULL,                false }         \
+#define _AL_END_HAPTIC_DRIVER_LIST                                   \
+   { 0, NULL, false }                                                \
    };
 
 

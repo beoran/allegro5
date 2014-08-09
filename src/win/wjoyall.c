@@ -11,15 +11,15 @@
  *      Windows wrap-all joystick driver.
  *      By Beoran.
  *      See readme.txt for copyright information.
- *    
- * This driver exists because on Windows, DirectInput and XInput are two 
+ *
+ * This driver exists because on Windows, DirectInput and XInput are two
  * different joystick input APIs which bith need to be supported simultaneously.
  *
  * Although DirectInput is deprecated, it is a far more capable API in terms
  * of joystick layout and force feedback effects. XInput is a much simpler
  * API but it only supports joysticks that have a layout similar to that of an
  * XBOX controller. XInput also has very limited force feedback effects,
- * it only supportd rubmble style vibrations.     
+ * it only supportd rubmble style vibrations.
  *
  * Older joystics or input devices such as steering wheels that do not map
  * cleanly to an XBOX controller tend to have DirectInput drivers available,
@@ -35,8 +35,8 @@
  * the Allegro XInput and DirectInput drivers into a single driver.
  * For this reason, the same joystick ormay show up twice
  * in the joystick list. However, XInput devices will appear before DirectInput
- * devices in the list, so when in doubt, use the joystick with the lowest ID. 
- * 
+ * devices in the list, so when in doubt, use the joystick with the lowest ID.
+ *
  */
 
 
@@ -104,26 +104,27 @@ ALLEGRO_JOYSTICK_DRIVER _al_joydrv_windows_all =
 };
 
 /* Mutex to protect state access. XXX is this needed? */
-static ALLEGRO_MUTEX  * joyall_mutex = NULL;
+static ALLEGRO_MUTEX  *joyall_mutex = NULL;
 
 /* Amount of directinput and xinput joystics known. */
 static int joyall_num_xinput, joyall_num_dinput;
 
 /* Sets up all joysticks from the two wrapped apis. */
-static void joyall_setup_joysticks(void) {
+static void joyall_setup_joysticks(void)
+{
    int index;
-   
+
    joyall_num_dinput = _al_joydrv_directx.num_joysticks();
    joyall_num_xinput = _al_joydrv_xinput.num_joysticks();
 
-  
-   for (index = 0; index < joyall_num_xinput; index ++) {
-      ALLEGRO_JOYSTICK * joystick       = _al_joydrv_xinput.get_joystick(index);
+
+   for (index = 0; index < joyall_num_xinput; index++) {
+      ALLEGRO_JOYSTICK *joystick = _al_joydrv_xinput.get_joystick(index);
       joystick->driver = &_al_joydrv_xinput;
    }
- 
+
    for (index = 0; index < joyall_num_dinput; index++) {
-      ALLEGRO_JOYSTICK * joystick       = _al_joydrv_directx.get_joystick(index);
+      ALLEGRO_JOYSTICK *joystick = _al_joydrv_directx.get_joystick(index);
       joystick->driver = &_al_joydrv_directx;
    }
 }
@@ -135,7 +136,7 @@ static bool joyall_init_joystick(void)
    bool ok_xi, ok_di;
    /* Create the mutex and a condition vaiable. */
    joyall_mutex = al_create_mutex_recursive();
-   if(!joyall_mutex)
+   if (!joyall_mutex)
       return false;
 
    al_lock_mutex(joyall_mutex);
@@ -181,13 +182,14 @@ static ALLEGRO_JOYSTICK *joyall_get_joystick(int num)
    num_dinput = _al_joydrv_directx.num_joysticks();
    num_xinput = _al_joydrv_xinput.num_joysticks();
    if (num < 0) return NULL;
-   /* Shift the joystick number to fit the range ofeach of the subdrivers */ 
+   /* Shift the joystick number to fit the range ofeach of the subdrivers */
    if (num < num_xinput) {
       return _al_joydrv_xinput.get_joystick(num);
-   } else if (num < (num_xinput + num_dinput)) {
+   }
+   else if (num < (num_xinput + num_dinput)) {
       return _al_joydrv_directx.get_joystick(num - num_xinput);
    }
-   return NULL; 
+   return NULL;
 }
 
 static void joyall_release_joystick(ALLEGRO_JOYSTICK *joy)
@@ -206,11 +208,13 @@ static void joyall_get_joystick_state(ALLEGRO_JOYSTICK *joy, ALLEGRO_JOYSTICK_ST
    joy->driver->get_joystick_state(joy, ret_state);
 }
 
-static const char *joyall_get_name(ALLEGRO_JOYSTICK *joy) {
+static const char *joyall_get_name(ALLEGRO_JOYSTICK *joy)
+{
    return joy->driver->get_name(joy);
 }
 
-static bool joyall_get_active(ALLEGRO_JOYSTICK *joy) {
+static bool joyall_get_active(ALLEGRO_JOYSTICK *joy)
+{
    return joy->driver->get_active(joy);
 }
 
