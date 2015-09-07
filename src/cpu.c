@@ -69,7 +69,7 @@ int al_get_memory_size(void)
    uint64_t aid = (uint64_t) sysconf(_SC_PHYS_PAGES);
    aid         *= (uint64_t) sysconf(_SC_PAGESIZE);
    aid         /= (uint64_t) (1024 * 1024);
-   return floor(aid);
+   return (int)(aid);
 #elif defined(ALLEGRO_HAVE_SYSCTL)
    #ifdef HW_REALMEM
       int mib[2] = {CTL_HW, HW_REALMEM};
@@ -83,19 +83,14 @@ int al_get_memory_size(void)
    if (sysctl(mib, 2, &memsize, &len, NULL, 0) == 0) { 
       return (int)(memsize / (1024*1024));
    } 
-   return -1;
 #elif defined(ALLEGRO_WINDOWS)
    MEMORYSTATUSEX status;
    status.dwLength = sizeof(status);
    if (GlobalMemoryStatusEx(&stat)) {
       return (int)(status.ullTotalPhys / (1024 * 1024));
    }
-   return -1;
-#else
-   return -1;
 #endif
-    }
-    return SDL_SystemRAM;
+   return -1;
 }
 
 
