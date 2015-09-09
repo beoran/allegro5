@@ -17,7 +17,9 @@
 
 /* Title: Event sources
  */
-
+#include "allegro5/allegro.h"
+#include "allegro5/cpu.h"
+#include "allegro5/internal/aintern.h"
 
 #ifdef HAVE_SYSCONF
 #include <unistd.h>
@@ -28,17 +30,12 @@
 #include <sys/sysctl.h>
 #endif
 
-#if defined(ALLEGRO_WINDOWS)
+#ifdef ALLEGRO_WINDOWS
+#define UNICODE
 #include <windows.h>
-#include <windowsx.h>
-
-#include "allegro5/allegro_windows.h"
-#include "allegro5/platform/aintwin.h"
 #endif
 
-#include "allegro5/allegro.h"
-#include "allegro5/cpu.h"
-#include "allegro5/internal/aintern.h"
+
 
 
 /** Function: al_get_cpu_count
@@ -86,40 +83,13 @@ int al_get_memory_size(void)
 #elif defined(ALLEGRO_WINDOWS)
    MEMORYSTATUSEX status;
    status.dwLength = sizeof(status);
-   if (GlobalMemoryStatusEx(&stat)) {
+   if (GlobalMemoryStatusEx(&status)) {
       return (int)(status.ullTotalPhys / (1024 * 1024));
    }
 #endif
    return -1;
 }
 
-
-#ifdef TEST_MAIN
-
-#include <stdio.h>
-
-int
-main()
-{
-    printf("CPU count: %d\n", SDL_GetCPUCount());
-    printf("CPU type: %s\n", SDL_GetCPUType());
-    printf("CPU name: %s\n", SDL_GetCPUName());
-    printf("CacheLine size: %d\n", SDL_GetCPUCacheLineSize());
-    printf("RDTSC: %d\n", SDL_HasRDTSC());
-    printf("Altivec: %d\n", SDL_HasAltiVec());
-    printf("MMX: %d\n", SDL_HasMMX());
-    printf("3DNow: %d\n", SDL_Has3DNow());
-    printf("SSE: %d\n", SDL_HasSSE());
-    printf("SSE2: %d\n", SDL_HasSSE2());
-    printf("SSE3: %d\n", SDL_HasSSE3());
-    printf("SSE4.1: %d\n", SDL_HasSSE41());
-    printf("SSE4.2: %d\n", SDL_HasSSE42());
-    printf("AVX: %d\n", SDL_HasAVX());
-    printf("RAM: %d MB\n", SDL_GetSystemRAM());
-    return 0;
-}
-
-#endif /* TEST_MAIN */
 
 /* vi: set ts=4 sw=4 expandtab: */
       
