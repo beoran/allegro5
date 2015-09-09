@@ -21,11 +21,11 @@
 #include "allegro5/cpu.h"
 #include "allegro5/internal/aintern.h"
 
-#ifdef HAVE_SYSCONF
+#ifdef ALLEGRO_HAVE_SYSCONF
 #include <unistd.h>
 #endif
 
-#ifdef HAVE_SYSCTLBYNAME
+#if defined(ALLEGRO_HAVE_SYSCTLBYNAME) || defined(ALLEGRO_HAVE_SYSCTL)
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #endif
