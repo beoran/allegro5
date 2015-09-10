@@ -23,7 +23,7 @@
 #endif
 
 AL_FUNC(int, al_get_cpu_count, (void));
-AL_FUNC(int, al_get_memory_size, (void));
+AL_FUNC(int, al_get_ram_size, (void));
 
 #ifdef __cplusplus
    }

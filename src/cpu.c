@@ -72,9 +72,9 @@ int al_get_cpu_count(void)
    return -1;
 }
 
-/** Function al_get_memory_size
+/** Function al_get_ram_size
  */
-int al_get_memory_size(void)
+int al_get_ram_size(void)
 {
 #if defined(ALLEGRO_HAVE_SYSCONF) && defined(_SC_PHYS_PAGES) && defined(_SC_PAGESIZE)
    uint64_t aid = (uint64_t) sysconf(_SC_PHYS_PAGES);
