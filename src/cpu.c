@@ -21,11 +21,20 @@
 #include "allegro5/cpu.h"
 #include "allegro5/internal/aintern.h"
 
+/* 
+* The CPU and pysical memiry detection functions below use 
+* sysconf() if the right define is available as a parameter, 
+* otherwise they use sysctl(), again if the right define is available. 
+* This was chosen so because sysconf is POSIX and (in theory) 
+* more portable than sysctl(). 
+* On Windows, of course, the Windows API is always used.
+*/
+
 #ifdef ALLEGRO_HAVE_SYSCONF
 #include <unistd.h>
 #endif
 
-#if defined(ALLEGRO_HAVE_SYSCTLBYNAME) || defined(ALLEGRO_HAVE_SYSCTL)
+#ifdef ALLEGRO_HAVE_SYSCTL
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #endif
@@ -36,26 +45,31 @@
 #endif
 
 
-
-
 /** Function: al_get_cpu_count
  */
 int al_get_cpu_count(void)
 {
 #if defined(ALLEGRO_HAVE_SYSCONF) && defined(_SC_NPROCESSORS_ONLN)
    return (int)sysconf(_SC_NPROCESSORS_ONLN);
-#elif defined(ALLEGRO_HAVE_SYSCTLBYNAME)
-   int result;
-   size_t size = sizeof(int);
-   sysctlbyname("hw.ncpu", &result, &size, NULL, 0);
-   return result;
+#elif defined(ALLEGRO_HAVE_SYSCTL)
+   #if defined(HW_AVAILCPU)
+      int mib[2] = {CTL_HW, HW_AVAILCPU};
+   #elif defined(HW_NCPU)
+      int mib[2] = {CTL_HW, HW_NCPU};
+   #else
+      return -1;
+   #endif
+   int ncpu = 1;
+   size_t len = sizeof(ncpu);
+   if (sysctl(mib, 2, &ncpu, &len, NULL, 0) == 0) { 
+      return ncpu;
+   }
 #elif defined(ALLEGRO_WINDOWS)
    SYSTEM_INFO info;
    GetSystemInfo(&info);
    return info.dwNumberOfProcessors;
-#else
-   return 1;
 #endif
+   return -1;
 }
 
 /** Function al_get_memory_size
@@ -72,14 +86,16 @@ int al_get_memory_size(void)
       int mib[2] = {CTL_HW, HW_REALMEM};
    #elif defined(HW_PHYSMEM)
       int mib[2] = {CTL_HW, HW_PHYSMEM};
-   #else
+   #elif defined(HW_MEMSIZE)
       int mib[2] = {CTL_HW, HW_MEMSIZE};
-   #endif  
+   #else
+      return -1;
+   #endif
    uint64_t memsize = 0;
    size_t len = sizeof(memsize);
    if (sysctl(mib, 2, &memsize, &len, NULL, 0) == 0) { 
       return (int)(memsize / (1024*1024));
-   } 
+   }
 #elif defined(ALLEGRO_WINDOWS)
    MEMORYSTATUSEX status;
    status.dwLength = sizeof(status);
