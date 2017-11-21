@@ -42,6 +42,9 @@ extern "C" {
    #include "allegro5/platform/aintlnx.h"
 #endif
 
+#ifdef ALLEGRO_ANDROID
+   #include "allegro5/platform/aintandroid.h"
+#endif
 
 
 /*----------------------------------------------------------------------*
@@ -81,7 +84,6 @@ AL_VAR(struct ALLEGRO_JOYSTICK_DRIVER, _al_joydrv_linux);
 #ifdef ALLEGRO_HAVE_LINUX_INPUT_H
 AL_VAR(struct ALLEGRO_HAPTIC_DRIVER, _al_hapdrv_linux);
 #endif
-
 
 #ifdef __cplusplus
    }

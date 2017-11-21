@@ -40,6 +40,7 @@ struct system_data_t {
    jclass image_loader_class;
    jclass clipboard_class;
    jclass apk_fs_class;
+   jclass vibrator_class;
 
    ALLEGRO_SYSTEM_ANDROID *system;
    ALLEGRO_MUTEX *mutex;
@@ -177,6 +178,7 @@ JNI_FUNC(bool, AllegroActivity, nativeOnCreate, (JNIEnv *env, jobject obj))
    jclass iae;
    jclass aisc;
    jclass asc;
+   jclass vib;
 
    ALLEGRO_DEBUG("entered nativeOnCreate");
 
@@ -212,7 +214,12 @@ JNI_FUNC(bool, AllegroActivity, nativeOnCreate, (JNIEnv *env, jobject obj))
 
    asc = (*env)->FindClass(env, ALLEGRO_ANDROID_PACKAGE_NAME_SLASH "/AllegroAPKList");
    system_data.apk_fs_class = (*env)->NewGlobalRef(env, asc);
-
+   
+   /*
+    * vib = (*env)->FindClass(env, ALLEGRO_ANDROID_PACKAGE_NAME_SLASH "/Vibrator");
+   system_data.vibrator_class = (*env)->NewGlobalRef(env, vib);
+   */
+     
    ALLEGRO_DEBUG("create mutex and cond objects");
    system_data.mutex = al_create_mutex();
    system_data.cond  = al_create_cond();
@@ -549,6 +556,7 @@ ALLEGRO_SYSTEM_INTERFACE *_al_system_android_interface()
    android_vt->get_path = _al_android_get_path;
    android_vt->shutdown_system = android_shutdown_system;
    android_vt->inhibit_screensaver = android_inhibit_screensaver;
+   android_vt->get_haptic_driver = _al_get_android_haptic_driver;
 
    return android_vt;
 }

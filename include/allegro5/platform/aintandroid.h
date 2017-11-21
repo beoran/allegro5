@@ -27,6 +27,12 @@ extern "C" {
 
 ALLEGRO_PATH *_al_android_get_path(int id);
 
+#define ALLEGRO_HAPDRV_ANDROID    AL_ID('A','N','D','H')
+
+#ifdef ALLEGRO_ANDROID
+AL_VAR(struct ALLEGRO_HAPTIC_DRIVER, _al_hapdrv_android);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

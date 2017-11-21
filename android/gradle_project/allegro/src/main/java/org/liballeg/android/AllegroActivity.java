@@ -36,6 +36,7 @@ public class AllegroActivity extends Activity
    private boolean joystickReconfigureNotified = false;
    private Vector<Integer> joysticks;
    private Clipboard clipboard;
+   private org.liballeg.android.Vibrator vibrator;
 
    public final static int JS_A = 0;
    public final static int JS_B = 1;
@@ -318,6 +319,7 @@ public class AllegroActivity extends Activity
       handler = new Handler();
       sensors = new Sensors(getApplicationContext());
       clipboard = new Clipboard(this);
+      vibrator  = new Vibrator(this);
 
       currentConfig = new Configuration(getResources().getConfiguration());
 
@@ -582,6 +584,19 @@ public class AllegroActivity extends Activity
       while (set_clip == false);
       return set_clip_result;
    }
+   
+   public boolean hasVibrator() {
+      return vibrator.hasVibrator();
+   }
+   
+   public void cancelVibrate() {
+      vibrator.cancel();
+   }
+   
+   public void vibrate(int milliseconds) {
+      vibrator.vibrate(milliseconds);
+   }
+   
 }
 
 /* vim: set sts=3 sw=3 et: */
